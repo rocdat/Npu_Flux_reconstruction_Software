@@ -659,6 +659,7 @@ continue
   ! #######
   !
   ! Get the conserved variables of the current solution at the error points
+  ! NOTE: Here assumes that uavesp(1:nq,:) are the conservative variables.
   !
   if (output_time_averaging) then
     ucurr(1:nq,1:np) = uavesp(1:nq,n1:n2)
@@ -685,7 +686,9 @@ continue
   if (present(vnew)) then
     !
     if (output_time_averaging) then
-      vcurr(1:nq,1:np) = uavesp(nq+1:2*nq,n1:n2)
+      !
+      ! FIXME: Should I do swap_t_for_rho=true for uavesp?
+      vcurr(1:nq,1:np) = usp2v( uavesp(1:nq,n1:n2), swap_t_for_rho=true )
     else
       vcurr(1:nq,1:np) = usp2v( usp(1:nq,n1:n2) , swap_t_for_rho=true )
     end if
@@ -845,8 +848,8 @@ continue
           vprev(1:nq,1:np) = usp2v( uoldsp(1:nq,n1:n2) , swap_t_for_rho=true )
         else
           ! a and b were already computed above, no need to do it again
-          vprev(1:nq,1:np) = b * uavesp(nq+1:2*nq,n1:n2) - &
-                             a * usp2v( usp(1:nq,n1:n2) , swap_t_for_rho=true )
+          vprev(1:nq,1:np)=b*usp2v(uavesp(1:nq,n1:n2),swap_t_for_rho=true) - &
+                           a*usp2v(usp(1:nq,n1:n2)   ,swap_t_for_rho=true)
         end if
       else
         vprev(1:nq,1:np) = usp2v( uoldsp(1:nq,n1:n2) , swap_t_for_rho=true )
