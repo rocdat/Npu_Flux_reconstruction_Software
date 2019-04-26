@@ -146,6 +146,9 @@ module parallel_mod
   !
   type(map_t), public, save, allocatable :: cell_map(:)
   !
+  ! FACE_MAP : 
+  type(map_t), public, save, allocatable :: face_map(:)
+  !
   !
   !
   ! #####################################################################
@@ -368,7 +371,6 @@ subroutine partition_grid(npart,metis_option_requested,bface,nodes_of_cell, &
   type(edge_t),     allocatable :: edge(:)
   type(map_t),      allocatable :: edge_map(:)
   type(face_t),     allocatable :: face(:)
-  type(map_t),      allocatable :: face_map(:)
   type(flux_pts_t), allocatable :: flx(:)
   type(fp_t),       allocatable :: fp
   !
@@ -715,11 +717,12 @@ continue
  !  read (*,*)
  !end if
  !call mpi_barrier(MPI_COMM_WORLD,mpierr)
-  if (allocated(face_map)) then
-    deallocate ( face_map , stat=ierr , errmsg=error_message )
-    call alloc_error(pname,"face_map",2,__LINE__,__FILE__,ierr,error_message)
-  end if
-  !
+ !
+  ! if (allocated(face_map)) then
+  !   deallocate ( face_map , stat=ierr , errmsg=error_message )
+  !   call alloc_error(pname,"face_map",2,__LINE__,__FILE__,ierr,error_message)
+  ! end if
+ !
  !if (mypnum == 0) then
  !  write (iout,*)
  !  write (iout,*) "PAUSING AFTER DEALLOCATING THE FACE_MAP ARRAY!"
