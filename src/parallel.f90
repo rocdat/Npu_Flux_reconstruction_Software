@@ -1555,7 +1555,7 @@ continue
     ! Set the communication weight of the cells to
     ! the number of solution points for each cell
     !
-    vsize = Cell_Solpts( cell_geom , cell_order )
+    vsize = cell_solpts( cell_geom , cell_order )
     !
     ! Determine whether communication weights are being used
     ! and adjust wgtflag accordingly
@@ -2135,7 +2135,7 @@ continue
     !
     if (use_edgpts) then
       !
-      np = Cell_Solpts( Geom_Edge , edge(n)%order )
+      np = cell_solpts( Geom_Edge , edge(n)%order )
       !
       do i = 1,size(edge(n)%cpu)
         !
@@ -6634,7 +6634,7 @@ continue
       !
     else
       !
-      nep = Cell_Solpts( Geom_Edge , edge(glb_edge)%order )
+      nep = cell_solpts( Geom_Edge , edge(glb_edge)%order )
       n_node_edge_pts = n_node_edge_pts +  nvar*nep
       !
     end if
@@ -6760,7 +6760,7 @@ continue
         ! This is the edge for this processor so
         ! create the edge point offset for this edge
         !
-        nep = Cell_Solpts( Geom_Edge , edge(glb_edge)%order )
+        nep = cell_solpts( Geom_Edge , edge(glb_edge)%order )
         edgpt_offset(loc_edge) = int( nep , kind=int_mpi )
         !
       else
@@ -7070,7 +7070,7 @@ continue
         !
       else
         !
-        scnt = scnt + Cell_Solpts( Geom_Edge , edge(glb_edge)%order )
+        scnt = scnt + cell_solpts( Geom_Edge , edge(glb_edge)%order )
         !
       end if
       !
@@ -7140,7 +7140,7 @@ continue
         !
       else
         !
-        nep = Cell_Solpts( Geom_Edge , edge(glb_edge)%order )
+        nep = cell_solpts( Geom_Edge , edge(glb_edge)%order )
         !
         do n = 0,nep-1
           !
@@ -7218,7 +7218,7 @@ continue
         !
       else
         !
-        nep = Cell_Solpts( Geom_Edge , edge(glb_edge)%order )
+        nep = cell_solpts( Geom_Edge , edge(glb_edge)%order )
         !
         do n = 0,nep-1
           !

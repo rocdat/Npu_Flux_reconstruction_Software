@@ -685,7 +685,7 @@ continue
   !
   if (n == -1) return
   !
-  nfp3d = Cell_Flxpts(Geom_Tetr,n)
+  nfp3d = cell_flxpts(Geom_Tetr,n)
   nep3d = n + 1
   !
 end function InterpToPoint_Tetr
@@ -722,7 +722,7 @@ continue
     end if
   end do
   !
-  nfp3d = Cell_Flxpts(Geom_Pyra,n)
+  nfp3d = cell_flxpts(Geom_Pyra,n)
   !
   ! If n is still -1, return with the interpolation matrix still being zero
   !
@@ -762,7 +762,7 @@ continue
     end if
   end do
   !
-  nfp3d = Cell_Flxpts(Geom_Pris,n)
+  nfp3d = cell_flxpts(Geom_Pris,n)
   !
   ! If n is still -1, return with the interpolation matrix still being zero
   !
@@ -2297,7 +2297,7 @@ continue
   !
   if (n == -1) return
   !
-  nfp3d = Cell_Flxpts(Geom_Tetr,n)
+  nfp3d = cell_flxpts(Geom_Tetr,n)
   nep3d = n + 1
   !
   ! Node 1
@@ -2385,7 +2385,7 @@ continue
     end if
   end do
   !
-  nfp3d = Cell_Flxpts(Geom_Tetr,n)
+  nfp3d = cell_flxpts(Geom_Tetr,n)
   !
   ! Allocate the return array containing the
   ! working precision interpolation matrix
@@ -2427,7 +2427,7 @@ continue
     end if
   end do
   !
-  nfp3d = Cell_Flxpts(Geom_Pyra,n)
+  nfp3d = cell_flxpts(Geom_Pyra,n)
   !
   ! If n is still -1, return with the interpolation matrix still being zero
   !
@@ -2502,7 +2502,7 @@ continue
     end if
   end do
   !
-  nfp3d = Cell_Flxpts(Geom_Pyra,n)
+  nfp3d = cell_flxpts(Geom_Pyra,n)
   !
   ! Allocate the return array containing the
   ! working precision interpolation matrix
@@ -2544,7 +2544,7 @@ continue
     end if
   end do
   !
-  nfp3d = Cell_Flxpts(Geom_Pris,n)
+  nfp3d = cell_flxpts(Geom_Pris,n)
   !
   ! If n is still -1, return with the interpolation matrix still being zero
   !
@@ -2619,7 +2619,7 @@ continue
     end if
   end do
   !
-  nfp3d = Cell_Flxpts(Geom_Pris,n)
+  nfp3d = cell_flxpts(Geom_Pris,n)
   !
   ! Allocate the return array containing the
   ! working precision interpolation matrix

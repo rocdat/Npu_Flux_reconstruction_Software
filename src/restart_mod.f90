@@ -3241,7 +3241,7 @@ continue
     this_geom = ordered_geom(global_cell) - 100*this_order
     !
     pinc_ptr(global_cell+1) = pinc_ptr(global_cell) + &
-                              Cell_Solpts(this_geom,this_order)
+                              cell_solpts(this_geom,this_order)
     !
   end do
   !
@@ -3341,7 +3341,7 @@ continue
     !
     ! Compute the actual block length for this cell
     !
-    sol_blklen(inp_cell) = int( Cell_Solpts(inp_geom,inp_order) , kind=int_mpi )
+    sol_blklen(inp_cell) = int( cell_solpts(inp_geom,inp_order) , kind=int_mpi )
     !
     ! Store all this information in cell_input_data for this_cell
     !

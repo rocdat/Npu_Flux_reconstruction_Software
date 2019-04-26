@@ -99,9 +99,9 @@ continue
   !
   do j = lbound(geom_solpts,dim=2),ubound(geom_solpts,dim=2)
     do i = lbound(geom_solpts,dim=1),ubound(geom_solpts,dim=1)
-      geom_solpts(i,j) = Cell_Solpts(i,j)
-      geom_flxpts(i,j) = Cell_Flxpts(i,j)
-      geom_edgpts(i,j) = Cell_Edgpts(i,j)
+      geom_solpts(i,j) = cell_solpts(i,j)
+      geom_flxpts(i,j) = cell_flxpts(i,j)
+      geom_edgpts(i,j) = cell_edgpts(i,j)
     end do
   end do
   !

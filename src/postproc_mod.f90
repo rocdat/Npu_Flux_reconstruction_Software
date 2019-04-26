@@ -2951,13 +2951,13 @@ continue
   ! Number of solution points for this combination
   ! of cell geometry and solution order
   !
-  nsp = Cell_Solpts(this_geom,this_order)
+  nsp = cell_solpts(this_geom,this_order)
   !
   ! Number of faces for this cell
   !
   nfp = 0
   do nf = 1,geom_faces(this_geom)
-    nfp = nfp + Cell_Solpts( cell_face_geom(nf,this_geom) , this_order )
+    nfp = nfp + cell_solpts( cell_face_geom(nf,this_geom) , this_order )
   end do
   !
   ! Number of edges for this cell
@@ -2965,7 +2965,7 @@ continue
   nep = 0
   if (any(this_geom == Geom_3D)) then
     do ne = 1,geom_edges(this_geom)
-      nep = nep + Cell_Solpts(Geom_Edge,this_order)
+      nep = nep + cell_solpts(Geom_Edge,this_order)
     end do
   end if
   !
@@ -3386,7 +3386,7 @@ pure function get_tria_solpt_indices(order) result(return_value)
   !
 continue
   !
-  np = Cell_Solpts(Geom_Tria,order)
+  np = cell_solpts(Geom_Tria,order)
   !
   allocate ( return_value(1:np) , source=0 , stat=ierr )
   !
@@ -3407,7 +3407,7 @@ pure function get_tria_face_indices(order) result(return_value)
   !
 continue
   !
-  np = Cell_Solpts(Geom_Tria,order)
+  np = cell_solpts(Geom_Tria,order)
   !
   allocate ( return_value(1:np) , source=0 , stat=ierr )
   !
@@ -3428,7 +3428,7 @@ pure function get_tria_node_indices(order) result(return_value)
   !
 continue
   !
-  np = Cell_Solpts(Geom_Tria,order)
+  np = cell_solpts(Geom_Tria,order)
   !
   allocate ( return_value(1:np) , source=0 , stat=ierr )
   !
@@ -3449,7 +3449,7 @@ pure function get_quad_solpt_indices(order) result(return_value)
   !
 continue
   !
-  np = Cell_Solpts(Geom_Quad,order)
+  np = cell_solpts(Geom_Quad,order)
   !
   allocate ( return_value(1:np) , source=0 , stat=ierr )
   !
@@ -3470,7 +3470,7 @@ pure function get_quad_face_indices(order) result(return_value)
   !
 continue
   !
-  np = Cell_Solpts(Geom_Quad,order)
+  np = cell_solpts(Geom_Quad,order)
   !
   allocate ( return_value(1:np) , source=0 , stat=ierr )
   !
@@ -3491,7 +3491,7 @@ pure function get_quad_node_indices(order) result(return_value)
   !
 continue
   !
-  np = Cell_Solpts(Geom_Quad,order)
+  np = cell_solpts(Geom_Quad,order)
   !
   allocate ( return_value(1:np) , source=0 , stat=ierr )
   !
@@ -3512,7 +3512,7 @@ pure function get_tetr_solpt_indices(order) result(return_value)
   !
 continue
   !
-  np = Cell_Solpts(Geom_Tetr,order)
+  np = cell_solpts(Geom_Tetr,order)
   !
   allocate ( return_value(1:np) , source=0 , stat=ierr )
   !
@@ -3533,7 +3533,7 @@ pure function get_tetr_face_indices(order) result(return_value)
   !
 continue
   !
-  np = Cell_Solpts(Geom_Tetr,order)
+  np = cell_solpts(Geom_Tetr,order)
   !
   allocate ( return_value(1:np) , source=0 , stat=ierr )
   !
@@ -3554,7 +3554,7 @@ pure function get_tetr_edge_indices(order) result(return_value)
   !
 continue
   !
-  np = Cell_Solpts(Geom_Tetr,order)
+  np = cell_solpts(Geom_Tetr,order)
   !
   allocate ( return_value(1:np) , source=0 , stat=ierr )
   !
@@ -3575,7 +3575,7 @@ pure function get_tetr_node_indices(order) result(return_value)
   !
 continue
   !
-  np = Cell_Solpts(Geom_Tetr,order)
+  np = cell_solpts(Geom_Tetr,order)
   !
   allocate ( return_value(1:np) , source=0 , stat=ierr )
   !
@@ -3596,7 +3596,7 @@ pure function get_pyra_solpt_indices(order) result(return_value)
   !
 continue
   !
-  np = Cell_Solpts(Geom_Pyra,order)
+  np = cell_solpts(Geom_Pyra,order)
   !
   allocate ( return_value(1:np) , source=0 , stat=ierr )
   !
@@ -3617,7 +3617,7 @@ pure function get_pyra_face_indices(order) result(return_value)
   !
 continue
   !
-  np = Cell_Solpts(Geom_Pyra,order)
+  np = cell_solpts(Geom_Pyra,order)
   !
   allocate ( return_value(1:np) , source=0 , stat=ierr )
   !
@@ -3638,7 +3638,7 @@ pure function get_pyra_edge_indices(order) result(return_value)
   !
 continue
   !
-  np = Cell_Solpts(Geom_Pyra,order)
+  np = cell_solpts(Geom_Pyra,order)
   !
   allocate ( return_value(1:np) , source=0 , stat=ierr )
   !
@@ -3659,7 +3659,7 @@ pure function get_pyra_node_indices(order) result(return_value)
   !
 continue
   !
-  np = Cell_Solpts(Geom_Pyra,order)
+  np = cell_solpts(Geom_Pyra,order)
   !
   allocate ( return_value(1:np) , source=0 , stat=ierr )
   !
@@ -3680,7 +3680,7 @@ pure function get_pris_solpt_indices(order) result(return_value)
   !
 continue
   !
-  np = Cell_Solpts(Geom_Pris,order)
+  np = cell_solpts(Geom_Pris,order)
   !
   allocate ( return_value(1:np) , source=0 , stat=ierr )
   !
@@ -3701,7 +3701,7 @@ pure function get_pris_face_indices(order) result(return_value)
   !
 continue
   !
-  np = Cell_Solpts(Geom_Pris,order)
+  np = cell_solpts(Geom_Pris,order)
   !
   allocate ( return_value(1:np) , source=0 , stat=ierr )
   !
@@ -3722,7 +3722,7 @@ pure function get_pris_edge_indices(order) result(return_value)
   !
 continue
   !
-  np = Cell_Solpts(Geom_Pris,order)
+  np = cell_solpts(Geom_Pris,order)
   !
   allocate ( return_value(1:np) , source=0 , stat=ierr )
   !
@@ -3743,7 +3743,7 @@ pure function get_pris_node_indices(order) result(return_value)
   !
 continue
   !
-  np = Cell_Solpts(Geom_Pris,order)
+  np = cell_solpts(Geom_Pris,order)
   !
   allocate ( return_value(1:np) , source=0 , stat=ierr )
   !

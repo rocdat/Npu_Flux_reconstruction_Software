@@ -853,6 +853,7 @@ subroutine create_face_derived_type(bface,cell_geom,cell_order,xyz_nodes, &
   use order_mod, only : geom_solpts
   use order_mod, only : find_geom_max_interp_order
   use geovar,    only : face_t,fp_t
+  use geovar,    only : xyz_face_nodes,xyz_fc
   !
   !.. Formal Arguments ..
   integer,                      intent(in) :: bface(:,:)
@@ -898,9 +899,7 @@ subroutine create_face_derived_type(bface,cell_geom,cell_order,xyz_nodes, &
   integer,  dimension(1:4) :: right_nodes
  !integer,  dimension(1:4) :: face_nodes
   real(wp), dimension(1:3) :: rnrm
-  real(wp), dimension(1:3) :: face_center
   real(wp), dimension(1:3) :: cell_center
-  real(wp), dimension(1:3,1:4) :: xyz_face
   real(wp), dimension(1:3,1:8) :: xyz_cell
  !integer,  dimension(1:maxFP) :: rot_fpts
   !
@@ -1082,10 +1081,23 @@ continue
   call debug_timer(start_timer,"section 4")
   !
   ! This is a test to make sure that face(nf)%left%cell is on the left side of
-  ! this face and face(nf)%right%cell is on the right side
+  ! this face and face(nf)%right%cell is on the right side.
+  ! Although nf=lfbnd+1,lface is enough for the above test, we set nf=1,lface
+  ! to assign xyz_face_nodes, xyz_fc, cell_center. All of these arrays are
+  ! global variables in geovar_mod.f90.
+  !
+  allocate(xyz_face_nodes(1:nr,1:4,1:lface),source=ten12,stat=ierr, &
+    errmsg=error_message)
+  call alloc_error(pname,"xyz_face_nodes",1,__LINE__,__FILE__,ierr, &
+    error_message)
+  !
+  allocate(xyz_fc(1:nr,1:lface),source=ten12,stat=ierr, &
+    errmsg=error_message)
+  call alloc_error(pname,"xyz_fc",1,__LINE__,__FILE__,ierr, &
+    error_message)
   !
   ic = 0
-  do nf = lfbnd+1,lface
+  do nf = 1,lface
     !
     left_cell = face(nf)%left%cell ! left cell on this face
     face_geom = face(nf)%geom      ! geometry of this face
@@ -1098,7 +1110,7 @@ continue
     !
     ! Coordinates of the nodes on this face
     !
-    xyz_face(1:nr,1:nfnods) = xyz_nodes(1:nr,face(nf)%nodes(1:nfnods))
+    xyz_face_nodes(1:nr,1:nfnods,nf) = xyz_nodes(1:nr,face(nf)%nodes(1:nfnods))
    !face_nodes(1:nfnods) = face(nf)%nodes(1:nfnods)
    !do n = 1,nfnods
    !  do i = 1,nr
@@ -1115,7 +1127,7 @@ continue
    !  end do
    !  face_center(i) = face_center(i) / real(nfnods,kind=wp)
    !end do
-    face_center(1:nr) = sum(xyz_face(1:nr,1:nfnods),dim=2) &
+    xyz_fc(1:nr,nf) = sum(xyz_face_nodes(1:nr,1:nfnods,nf),dim=2) &
                       / real(nfnods,kind=wp)
     !
     ! Get the coordinates of the center of the left cell on this face
@@ -1134,12 +1146,12 @@ continue
     !
     ! Get the normal to this face using the nodes that define it
     !
-    rnrm(1:nr) = face_normal( xyz_face(1:nr,1:nfnods) )
+    rnrm(1:nr) = face_normal( xyz_face_nodes(1:nr,1:nfnods,nf) )
     !
     ! Compute the dot product of the vector from the center of
     ! the left cell to the center of the face with the face normal
     !
-    dir = dot( rnrm(1:nr) , face_center(1:nr) - cell_center(1:nr) )
+    dir = dot( rnrm(1:nr) , xyz_fc(1:nr,nf) - cell_center(1:nr) )
     !
     ! If dot is negative, then the cell stored in face(nf)%right%cell
     ! is actually the cell to the left of the face vector and needs

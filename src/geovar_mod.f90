@@ -57,6 +57,8 @@ module geovar
   !
   integer, public, save, allocatable, dimension(:) :: cell_geom
   !
+  ! integer, public, save, allocatable, dimension(:) :: face_geom
+  !
   ! cell_order : gives the order of the solution for each cell
   !              This if for future use if we want the solution order
   !              to not be constant across all cells
@@ -68,6 +70,15 @@ module geovar
   !
   real(wp), public, save, allocatable, dimension(:,:) :: xyz_nodes
   real(wp), public, save, allocatable, dimension(:,:) :: xyz
+  !
+  ! xyz_face_nodes : x,y,z coordinates of the nodes in the face
+  real(wp), public, save, allocatable, dimension(:,:,:) :: xyz_face_nodes
+  !
+  ! xyz_fc : x,y coordinates of the face center
+  real(wp), public, save, allocatable, dimension(:,:) :: xyz_fc
+  !
+  !
+  ! real(wp), public, save, allocatable, dimension(:,:) :: xyz_fp
   !
   ! Grid size parameters for global grid
   !
