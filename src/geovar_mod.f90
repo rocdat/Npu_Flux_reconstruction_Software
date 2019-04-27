@@ -60,8 +60,6 @@ module geovar
   !
   integer, public, save, allocatable, dimension(:) :: cell_geom
   !
-  ! integer, public, save, allocatable, dimension(:) :: face_geom
-  !
   ! cell_order : gives the order of the solution for each cell
   !              This if for future use if we want the solution order
   !              to not be constant across all cells
@@ -81,7 +79,7 @@ module geovar
   real(wp), public, save, allocatable, dimension(:,:) :: xyz_fc
   !
   !
-  ! real(wp), public, save, allocatable, dimension(:,:) :: xyz_fp
+  real(wp), public, save, allocatable, dimension(:,:) :: xyz_fp
   !
   ! Grid size parameters for global grid
   !
@@ -431,6 +429,8 @@ module geovar
   !
   type, public :: prop_t
     integer :: npts
+    !
+    ! mesh order of this cell or face
     integer :: order
     integer :: geom
     integer :: elem_type

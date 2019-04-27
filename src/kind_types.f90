@@ -587,6 +587,9 @@ module module_kind_types
   integer, parameter :: dump_CGNS   = -2
   !
   ! Cell Geometry Family Types
+  ! This data structure is about the high order mesh. See cgns_mod.f90
+  ! QUESTION: Not sure what is the difference among them when defining the
+  ! transformation matrix from the grid nodes to the solution points.
   !
   type :: geom_family_t
     integer :: v = 1

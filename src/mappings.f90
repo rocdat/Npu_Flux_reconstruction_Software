@@ -14,6 +14,7 @@ module mappings_mod
   ! ##################################
   !
   public :: get_solution_points
+  public :: get_flux_points
   !
   type :: mapping_matrices_t
     integer :: min_order = 1
@@ -310,6 +311,264 @@ continue
   4 format (" std_elem(",a,",",i0,")%",a,1x,a," contiguous")
   !
 end subroutine get_solution_points
+!
+!###############################################################################
+!
+subroutine get_flux_points()
+  !
+  use geovar,         only : grid
+  use geovar,         only : nr !,nfbnd,ncell,nnode,n_totcel,n_totnod
+  ! use geovar,         only : n_solpts,n_totpts
+  ! use geovar,         only : nodes_of_cell_ptr,nodes_of_cell
+  ! use geovar,         only : bface,xyz_nodes,xyz
+  use geovar,         only : cell_geom,cell_order
+  use geovar,         only : face
+  use geovar,         only : n_flxpts
+  use geovar,         only : xyz_fp
+  !
+  use order_mod,      only : geom_solpts
+  ! use order_mod,      only : n_min_geom,n_max_geom
+  ! use order_mod,      only : n_min_order,n_max_order
+  !
+  use quadrature_mod, only : std_elem
+  !
+  !.. Local Scalars ..
+  ! integer :: n,p1,p2
+  integer :: ierr,n1,n2,mp
+  integer :: this_face,mesh_order
+  integer :: this_geom,this_order
+  ! logical(lk) :: use_nodes_of_cell
+  ! logical(lk) :: check_grid_for_pts
+  integer :: nface,nfp,nfnods
+  !
+  type(geom_family_t) :: elem_family
+  !
+  character(len=200) :: array_name
+  !
+  !.. Local Pointers ..
+  type(matrix), pointer  :: this_map
+  real(wp),     pointer :: edge_pts(:)
+  real(wp),     pointer :: tria_pts(:,:)
+  !
+  !.. Local Allocatable Arrays ..
+  real(wp), allocatable :: elem_xyz(:,:)
+  !
+  !.. Local Parameters ..
+  character(len=*), parameter :: pname = "get_flux_points"
+  !
+continue
+  !
+  call debug_timer(entering_procedure,pname)
+  !
+  ! check_grid_for_pts = fals
+  !
+  ! Initialize the local pointers
+  !
+  edge_pts => null()
+  tria_pts => null()
+  !
+  ! We need to reset various grid size parameters in case partitioning
+  ! was done for use with multiple processors. If only using with a
+  ! single processor, this should just give the values we already have.
+  !
+  nface = size(face)
+  ! nfbnd = size(bface,dim=2)
+  ! n_totcel = size(nodes_of_cell_ptr) - 1
+  ! n_totnod = size(xyz_nodes,dim=2)
+  ! nnode = maxval(nodes_of_cell(1:nodes_of_cell_ptr(ncell+1)))
+  !
+  ! Creat face_geom and face_order array
+  ! In fact, face(nf)%geom, face(nf)%order are the same arrays.
+  !
+  ! Allocate the mapping array and the component
+  ! arrays MeshOrder, EdgeDefOrder, and FaceDefOrder
+  ! Passing cell_geom, cell_order also works for flux points.
+  !
+  call create_mapping_array(cell_geom,cell_order,grid)
+  !
+  ! if (allocated(grid)) then
+  !   check_grid_for_pts = (allocated(grid%elem) .and. allocated(grid%xyz))
+  ! end if
+  !
+  ! Get the total number of interior solution points
+  !
+  n_flxpts = 0
+  do this_face = 1,nface
+    n_flxpts=n_flxpts+geom_solpts(face(this_face)%geom,face(this_face)%order)
+  end do
+  !
+  ! Now calculate the coordinates of the solution points within each cell
+  !
+  allocate ( xyz_fp(1:nr,1:n_flxpts) , source=zero , &
+             stat=ierr , errmsg=error_message )
+  call alloc_error(pname,"xyz_fp",1,__LINE__,__FILE__,ierr,error_message)
+  !
+  ! Initialize the counting index to current
+  ! storage location within the xyz array
+  !
+  n2 = 0
+  !
+  ! Loop over all the cells local to this processor and map the coordinates
+  ! of the points defining each element that were given by the grid file to
+  ! the coordinates of the solution points within each cell
+  !
+  do this_face = 1,nface
+    !
+    this_geom = face(this_face)%geom
+    this_order = face(this_face)%order
+    !
+    nfp = geom_solpts(this_geom,this_order) ! number of flux points
+    !
+    n1 = n2 + 1
+    n2 = n2 + nfp
+    !
+    ! Reset use_nodes_of_cell to true for this cell
+    !
+    ! use_nodes_of_cell = true
+    !
+    ! Check to see if we will be able to extract mesh points for this
+    ! cell using grid%elem(:)%pts.
+    ! If we can, set use_nodes_of_cell to false so that we use the
+    ! possibly higher-order mesh information in grid%elem and grid%xyz.
+    !
+    ! if (check_grid_for_pts) then
+    !   if (allocated(grid%elem(this_cell)%pts)) then
+    !     use_nodes_of_cell = fals
+    !   end if
+    ! end if
+    !
+    ! if (use_nodes_of_cell) then
+    !   !
+    !   mesh_order = 1
+    !   elem_family = Complete
+    !   !
+    !   p1 = nodes_of_cell_ptr(this_cell)+1
+    !   p2 = nodes_of_cell_ptr(this_cell+1)
+    !   !
+    !   ! Using F2003 auto-reallocation
+    !   elem_xyz = xyz_nodes(1:nr, nodes_of_cell(p1:p2) )
+    !   !
+    ! else
+      !
+      ! mesh_order = grid%elem(this_cell)%prop%order
+      ! elem_family = grid%elem(this_cell)%prop%family
+      !
+      ! Using F2003 auto-reallocation
+      ! elem_xyz = grid%xyz(1:nr, grid%elem(this_cell)%pts(:) )
+      !
+    ! end if
+    !
+    ! Mesh order of this face is the mesh order of its host cell
+    ! geom family is also from its host cell
+    mesh_order = grid%elem( face(this_face)%left%cell )%prop%order
+    elem_family = grid%elem( face(this_face)%left%cell )%prop%family
+    !
+    nfnods = geom_nodes(face(this_face)%geom)
+    ! FIXME: GMSH format handles only the linear grid element. Thus the
+    ! elem_family is only Complete. And mesh_order is only 1.
+    ! nodes are only the end nodes of the edge of the face.
+    elem_xyz = grid%xyz( 1:nr, face(this_face)%nodes(1:nfnods) )
+    !
+    ! Assign a local pointer to the mapping
+    ! matrix as an alias to simplify the code
+    !
+    if (elem_family == Edge_Defined) then
+      this_map => mapping(this_geom,this_order)%EdgeDefOrder(mesh_order)
+      write (array_name,1) Geom_Name(this_geom),this_order, &
+                           "EdgeDefOrder",mesh_order
+    else if (elem_family == Face_Defined) then
+      this_map => mapping(this_geom,this_order)%FaceDefOrder(mesh_order)
+      write (array_name,1) Geom_Name(this_geom),this_order, &
+                           "FaceDefOrder",mesh_order
+    else
+      this_map => mapping(this_geom,this_order)%MeshOrder(mesh_order)
+      write (array_name,1) Geom_Name(this_geom),this_order, &
+                           "MeshOrder",mesh_order
+    end if
+    !
+    ! Create the mapping matrix for this combination of cell geometry and
+    ! cell order if the mat component of this_map has not been allocated yet
+    !
+    if (.not.allocated(this_map%mat)) then
+      !
+      mp = size(elem_xyz,dim=2)
+      !
+      ! Allocate the mat component of this_map
+      !
+      allocate ( this_map%mat(1:mp,1:nfp) , source=zero , &
+                 stat=ierr , errmsg=error_message )
+      call alloc_error(pname,array_name,1,__LINE__,__FILE__,ierr,error_message)
+      !
+      edge_pts => std_elem(Geom_Edge,this_order)%pts(1,:)
+      tria_pts => std_elem(Geom_Tria,this_order)%pts
+      !
+      select case (this_geom)
+        !
+        case (Geom_Edge)
+          !
+          this_map%mat = map_edge_to_solpts( mp , nfp , edge_pts , &
+                                             mesh_order )
+          !
+        case (Geom_Tria)
+          !
+          this_map%mat = map_tria_to_solpts( mp , nfp , tria_pts , &
+                                             mesh_order , elem_family )
+          !
+        case (Geom_Quad)
+          !
+          this_map%mat = map_quad_to_solpts( mp , nfp , edge_pts , &
+                                             mesh_order , elem_family )
+          !
+        case default
+          !
+          write (iout,2) this_face,face(this_face)%geom
+          call stop_gfr(abort,pname,__LINE__,__FILE__)
+          !
+      end select
+      !
+      if (associated(edge_pts)) edge_pts => null()
+      if (associated(tria_pts)) tria_pts => null()
+      !
+      ! Check the newly made matrix for sparsity
+      !
+      call this_map%check_for_sparsity
+      !
+    end if
+    !
+    ! Now use the mapping matrix to map the coordinates of the points for the
+    ! element provided by the grid file to the coordinates of the solution
+    ! points for the cell
+    !
+    xyz_fp(1:nr,n1:n2) = this_map%mm_mult( elem_xyz(:,:) )
+    !
+    if (associated(this_map)) this_map => null()
+    !
+  end do
+  !
+  ! Deallocate the local arrays before leaving
+  !
+  if (allocated(elem_xyz)) then
+    deallocate ( elem_xyz , stat=ierr , errmsg=error_message )
+    call alloc_error(pname,"elem_xyz",2,__LINE__,__FILE__,ierr,error_message)
+  end if
+  !
+  if (allocated(mapping)) then
+    deallocate ( mapping , stat=ierr , errmsg=error_message )
+    call alloc_error(pname,"mapping",2,__LINE__,__FILE__,ierr,error_message)
+  end if
+  !
+  call debug_timer(leaving_procedure,pname)
+  !
+  ! Format Statements
+  !
+  1 format ("this_map => mapping(",a,",",i0,")%",a,"(",i0,")%mat")
+  2 format (" ERROR: Invalid face geometry!",/, &
+            "        Face = ",i0,/, &
+            "        Geom = ",i0,/)
+  3 format ("ERROR: ",a," cells are currently not supported!")
+  4 format (" std_elem(",a,",",i0,")%",a,1x,a," contiguous")
+  !
+end subroutine get_flux_points
 !
 !###############################################################################
 !

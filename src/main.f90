@@ -48,6 +48,7 @@ program GFR_main
   use restart_mod, only : write_restart_file
   !
   use mappings_mod, only : get_solution_points
+  use mappings_mod, only : get_flux_points
   !
   use connectivity_mod, only : get_grid_connectivity
   !
@@ -211,7 +212,12 @@ continue
   call get_grid_connectivity(bface,cell_geom,cell_order,xyz_nodes, &
                              nodes_of_cell,nodes_of_cell_ptr)
   call memory_pause("getting grid connectivity", &
-                    "initializing vandermonde matrices")
+                    "getting the flux points")
+  !
+  ! Get the coordinates of the solution points within each grid face
+  !
+  call get_flux_points
+  call memory_pause("getting the flux points","initializing vandermonde matrices")
   !
   ! Compute the remaining quadrature information
   ! (Vandermonde matrix, stiffness matrix, LIFT / correction function, etc.)
