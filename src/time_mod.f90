@@ -1369,22 +1369,6 @@ continue
   allocate ( ave(1:nvar) , source=zero , stat=ierr , errmsg=error_message )
   call alloc_error(pname,"ave",1,__LINE__,__FILE__,ierr,error_message)
   !
-  ! Allocate and initialize the time-averaged variables
-  ! solution array if it hasnt already been allocated.
-  !
-  if (.not. allocated(uavesp)) then
-    !
-    allocate ( uavesp(1:nvar,1:n_solpts) , source=zero , &
-               stat=ierr , errmsg=error_message )
-    call alloc_error(pname,"uavesp",1,__LINE__,__FILE__,ierr,error_message)
-    !
-    ! Initialize the time-averaged variables to the initial/restart
-    ! solution since they werent read from a time-averaged restart file.
-    !
-    call update_time_ave
-    !
-  end if
-  !
   ! Allocate and initialize the time averaged wall quantities.
   ! Currently it includes only y^+.
   if (.not. allocated(tauw_aver_fp)) then
@@ -1405,6 +1389,22 @@ continue
     ! solution since they werent read from a time-averaged restart file.
     !
     ! source=zero is actually the initialization.
+    !
+  end if
+  !
+  ! Allocate and initialize the time-averaged variables
+  ! solution array if it hasnt already been allocated.
+  !
+  if (.not. allocated(uavesp)) then
+    !
+    allocate ( uavesp(1:nvar,1:n_solpts) , source=zero , &
+               stat=ierr , errmsg=error_message )
+    call alloc_error(pname,"uavesp",1,__LINE__,__FILE__,ierr,error_message)
+    !
+    ! Initialize the time-averaged variables to the initial/restart
+    ! solution since they werent read from a time-averaged restart file.
+    !
+    call update_time_ave
     !
   end if
   !
@@ -1509,7 +1509,7 @@ continue
     ! ave_var(nq+3) = ct*ave_var(nm2) - st*ave_var(nm1)
     !
     ! First, update the time-averaged conservative variables
-  uavesp(1:nq,:) = a*uavesp(1:nq,:) + b*usp(1:nq,:)
+  uavesp(1:nq,:) = a*uavesp(1:nq,1:n_solpts) + b*usp(1:nq,1:n_solpts)
     ! do m = 1,nq
     !   uavesp(m,n) = a*uavesp(m,n) + b*usp(m,n)
     ! end do
