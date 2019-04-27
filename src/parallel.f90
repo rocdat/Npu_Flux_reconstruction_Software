@@ -28,6 +28,7 @@ module parallel_mod
   !.. Public Module Procedures ..
   !
   public :: create_serial_cell_map
+  public :: create_serial_face_map
   public :: partition_grid
  !public :: collect_global_solpts
   public :: collect_global_solution
@@ -328,6 +329,36 @@ continue
   call debug_timer(leaving_procedure,pname)
   !
 end subroutine create_serial_cell_map
+!
+!###############################################################################
+!
+subroutine create_serial_face_map(lface)
+  !
+  !.. Formal Arguments ..
+  integer, intent(in) :: lface
+  !
+  !.. Local Scalars ..
+  integer :: ierr
+  !
+  !.. Local Parameters ..
+  character(len=*), parameter :: pname = "create_serial_face_map"
+  !
+continue
+  !
+  call debug_timer(entering_procedure,pname)
+  !
+  allocate ( face_map(1:1) , stat=ierr , errmsg=error_message )
+  call alloc_error(pname,"face_map",1,__LINE__,__FILE__,ierr, &
+                   error_message,skip_alloc_pause)
+  !
+  allocate ( face_map(1)%loc_to_glb(1:lface) , source=intseq(1,lface) , &
+             stat=ierr , errmsg=error_message )
+  call alloc_error(pname,"face_map(1)%loc_to_glb",1,__LINE__,__FILE__,ierr, &
+                   error_message)
+  !
+  call debug_timer(leaving_procedure,pname)
+  !
+end subroutine create_serial_face_map
 !
 !###############################################################################
 !

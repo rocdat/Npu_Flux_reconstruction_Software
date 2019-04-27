@@ -98,6 +98,7 @@ program GFR_main
   !
   use parallel_mod, only : partition_grid
   use parallel_mod, only : create_serial_cell_map
+  use parallel_mod, only : create_serial_face_map
   !
   use module_limiters, only : initialize_limiters
   use module_limiters, only : compute_cell_ave
@@ -211,9 +212,16 @@ continue
   !
   call get_grid_connectivity(bface,cell_geom,cell_order,xyz_nodes, &
                              nodes_of_cell,nodes_of_cell_ptr)
-  call memory_pause("getting grid connectivity", &
-                    "getting the flux points")
   !
+  if (npart == 1) then
+    call memory_pause("getting grid connectivity", &
+                      "getting serial face map")
+    call create_serial_face_map(nface)
+    call memory_pause("getting serial face map","getting the flux points")
+  else
+    call memory_pause("getting grid connectivity", &
+                      "getting the flux points")
+  end if
   ! Get the coordinates of the solution points within each grid face
   !
   call get_flux_points
