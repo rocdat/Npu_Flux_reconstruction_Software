@@ -1140,12 +1140,16 @@ subroutine initialize_time_ave()
   use ovar,    only : time,ave_start_time
   use ovar,    only : time_ave_vel_is_axisymm
   use flowvar, only : time_ave_variables
-  use flowvar, only : uavesp
+  use flowvar, only : uavesp,tauw_aver_fp,tauw_fp
+  use geovar,  only : wall_face_idx,face
+  use order_mod, only : geom_solpts,maxFP
   !
   !.. Local Scalars ..
   integer :: l,m,nv,nvar,ierr
   character(len=1)  :: ta_char,v1,v2,v3
   character(len=30) :: array_name
+  integer :: n_wall_face,nf,nfp
+  integer :: face_geom,face_order
   !
   !.. Local Parameters ..
   character(len=*), parameter :: pname = "initialize_time_ave"
@@ -1381,6 +1385,29 @@ continue
     !
   end if
   !
+  ! Allocate and initialize the time averaged wall quantities.
+  ! Currently it includes only y^+.
+  if (.not. allocated(tauw_aver_fp)) then
+    !
+    n_wall_face = size(wall_face_idx)
+    !
+    allocate ( tauw_aver_fp(1:maxFP,1:n_wall_face), source=zero, &
+               stat=ierr, errmsg=error_message)
+    call alloc_error(pname,"tauw_aver_fp",1,__LINE__,__FILE__,ierr, &
+      error_message)
+    !
+    allocate ( tauw_fp(1:maxFP,1:n_wall_face), source=zero, &
+               stat=ierr, errmsg=error_message)
+    call alloc_error(pname,"tauw_fp",1,__LINE__,__FILE__,ierr, &
+      error_message)
+    !
+    ! Initialize the time-averaged tauw_aver_fp to the initial/restart
+    ! solution since they werent read from a time-averaged restart file.
+    !
+    ! source=zero is actually the initialization.
+    !
+  end if
+  !
   call debug_timer(leaving_procedure,pname)
   !
   ! Format Statements
@@ -1398,6 +1425,7 @@ subroutine update_time_ave()
   use flowvar, only : usp,uavesp
   use ovar,    only : time,prev_ave_time
   use ovar,    only : ave_start_time,saved_ave_time
+  use flowvar, only : tauw_aver_fp,tauw_fp
   !
   !.. Local Scalars ..
   integer  :: m,n,nvar
@@ -1449,7 +1477,7 @@ continue
     nc1 = 2; nc2 = 3;
   end if
   !
-  do n = 1,n_solpts
+  ! do n = 1,n_solpts
     !
     ! y = xyz(nc1,n)
     ! z = xyz(nc2,n)
@@ -1481,10 +1509,10 @@ continue
     ! ave_var(nq+3) = ct*ave_var(nm2) - st*ave_var(nm1)
     !
     ! First, update the time-averaged conservative variables
-    !
-    do m = 1,nq
-      uavesp(m,n) = a*uavesp(m,n) + b*usp(m,n)
-    end do
+  uavesp(1:nq,:) = a*uavesp(1:nq,:) + b*usp(1:nq,:)
+    ! do m = 1,nq
+    !   uavesp(m,n) = a*uavesp(m,n) + b*usp(m,n)
+    ! end do
     !
     ! Next, update the time-averaged primitive variables
     ! (with temperature instead of density)
@@ -1501,7 +1529,7 @@ continue
     !   uavesp(m,n) = a*uavesp(m,n) + b*product( ave_var(time_ave_var(m)%idx) )
     ! end do
     !
-  end do
+  ! end do
   !
   ! Update prev_ave_time to the current time
   !
@@ -1509,6 +1537,7 @@ continue
   !
   ! Update the wall quantities
   !
+  tauw_aver_fp = a*tauw_aver_fp + b*tauw_fp
   !
   call debug_timer(leaving_procedure,pname)
   !

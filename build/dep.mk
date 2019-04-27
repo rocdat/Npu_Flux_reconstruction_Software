@@ -173,7 +173,8 @@ $(OBJDIR)/flux.o : flux.f90 \
          $(FUNDIR)/inviscid_fluxes.f90 \
          $(FUNDIR)/viscous_fluxes.f90 \
          $(FUNDIR)/grad_cv_to_grad_pv.f90 \
-         $(FUNDIR)/viscosity.f90
+         $(FUNDIR)/viscosity.f90 \
+         $(FUNDIR)/calc_surface_quantities.f90
 
 $(OBJDIR)/generic.o : generic.f90 \
             $(OBJDIR)/kind_types.o \

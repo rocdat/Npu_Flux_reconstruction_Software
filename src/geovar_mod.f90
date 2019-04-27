@@ -42,6 +42,9 @@ module geovar
   ! ncell : total number of grid cells
   ! nface : total number of edges/faces
   ! nfbnd : total number of boundary edges/faces
+  ! n_totcel : total number of grid cells including the ghost cells
+  ! n_totpts : total number of solution points including the solution points
+  !            in the ghost cells.
   !
   integer, public, save :: nr
   integer, public, save :: nnode
@@ -454,6 +457,12 @@ module geovar
   end type grid_t
   !
   type(grid_t), public, save, allocatable :: grid
+  !
+  ! wall_face_idx : it stores the index of the wall face nf in the range of
+  !                 [1,nfbnd].
+  ! wall_face_idx_inv : it stores the inverse index.
+  integer, public, save, allocatable :: wall_face_idx(:)
+  integer, public, save, allocatable :: wall_face_idx_inv(:)
   !
 contains
 !

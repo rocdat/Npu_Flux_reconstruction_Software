@@ -331,9 +331,9 @@ continue
   !
   call initialize_dusp
   !
-  ! Prepare to calculate the wall quantities including tau_wall.
+  ! Prepare the wall faces to calculate the wall quantities including tau_wall
   !
-  ! call initialize_wall_quantities
+  call initialize_wall_faces
   !
   ! Output the boundary conditions
   !
@@ -1992,28 +1992,58 @@ end subroutine create_bc_in
 !
 !###############################################################################
 !
-subroutine initialize_wall_quantities
+subroutine initialize_wall_faces
   !
   ! Use Statements
-  ! use
+  use geovar, only : bface,nfbnd,wall_face_idx,wall_face_idx_inv
   !
   ! Formal Arguments
-  ! intent(in)
   !
   ! Local Varaibles
-  ! integer
+  integer :: n,nf,ierr
   !
   ! Local Parameter
-  character(len=*), parameter :: pname = "initialize_wall_quantities"
+  character(len=*), parameter :: pname = "initialize_wall_faces"
   !
 continue
   !
+  call debug_timer(entering_procedure,pname)
+  !
+  ! Init the index array for wall faces
+  allocate ( wall_face_idx(1:nfbnd), source=0, stat=ierr, errmsg=error_message)
+  call alloc_error(pname,"wall_face_idx",1,__LINE__,__FILE__,ierr,error_message)
+  !
+  allocate ( wall_face_idx_inv(1:nfbnd), source=0, stat=ierr, &
+    errmsg=error_message)
+  call alloc_error(pname,"wall_face_idx_inv",1,__LINE__,__FILE__,ierr, &
+    error_message)
+  !
   ! Find the wall surfaces
+  n = 0
+  do nf = 1,nfbnd
+    !
+    if ( any( bc_walls == bface(1,nf) ) ) then
+      !
+      ! This nf is a wall face. Store nf.
+      n = n + 1
+      wall_face_idx(n) = nf
+      wall_face_idx_inv(nf) = n
+    end if
+    !
+  end do
   !
-  ! Allocate memory for Cf
-
+  ! Reallocate the wall_face_idx array based on the real number of wall faces
+  call reallocate(wall_face_idx,n)
   !
-end subroutine initialize_wall_quantities
+  ! Reallocate wall_face_idx_inv
+  ! The function reallocate assumes that the start index is 1 while here the
+  ! starting index could be possibly larger than 1. I could define another
+  ! reallocate function to do that. However, let us stop here and temporarily
+  ! leave it untouched. The memory cost would be small.
+  !
+  call debug_timer(leaving_procedure,pname)
+  !
+end subroutine initialize_wall_faces
 !
 !###############################################################################
 !

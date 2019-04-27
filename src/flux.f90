@@ -440,6 +440,8 @@ subroutine correct_interface_flux_visc(time_step,rk_step)
   use metrics_mod,       only : geofa
   use correction_mod,    only : correct
   use flowvar,           only : usp,residual,faceflx,faceusp,facedusp
+  use flowvar,           only : tauw_fp
+  use geovar,            only : wall_face_idx_inv
   !
   !.. Formal Arguments ..
   integer, intent(in) :: time_step
@@ -547,6 +549,17 @@ continue
         !
         if (governing_equations == NavierStokes_Eqns) then
           vflx(:) = visc_wall_flx_cv( unrm(:) , ruqp(:,k) , rduqp(:,:,k) )
+          !
+          ! Check if tauw_fp is allocated. If so, time averaging tauw is
+          ! enabled. So calc tauw.
+          if ( allocated(tauw_fp) ) then
+            !
+            ! Wall friction is the wall-parallel component of the wall normal
+            ! flux.
+            tauw_fp(k,wall_face_idx_inv(nf)) = calc_tauw(vflx,unrm)
+            !
+          end if
+          !
         end if
         !
       else
@@ -802,6 +815,7 @@ continue
             5x,"FP ",i0," :   LP=",i0,", RP=",i0,/, &
             100("-"))
   7 format (es16.6,5x,es15.6,:,es15.6)
+  !
   !
 end subroutine correct_interface_flux_visc
 !
@@ -1419,6 +1433,8 @@ end subroutine correct_gradients_br2
 include "Functions/upwind_fluxes.f90"
 include "Functions/grad_cv_to_grad_pv.f90"
 include "Functions/viscosity.f90"
+
+include "Functions/calc_surface_quantities.f90"
 !
 !###############################################################################
 !
