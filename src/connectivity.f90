@@ -1086,15 +1086,19 @@ continue
   ! to assign xyz_face_nodes, xyz_fc, cell_center. All of these arrays are
   ! global variables in geovar_mod.f90.
   !
-  allocate(xyz_face_nodes(1:nr,1:4,1:lface),source=ten12,stat=ierr, &
-    errmsg=error_message)
-  call alloc_error(pname,"xyz_face_nodes",1,__LINE__,__FILE__,ierr, &
-    error_message)
+  if ( .not. allocated(xyz_face_nodes) ) then
+    allocate(xyz_face_nodes(1:nr,1:4,1:lface),source=ten12,stat=ierr, &
+      errmsg=error_message)
+    call alloc_error(pname,"xyz_face_nodes",1,__LINE__,__FILE__,ierr, &
+      error_message)
+  end if
   !
-  allocate(xyz_fc(1:nr,1:lface),source=ten12,stat=ierr, &
-    errmsg=error_message)
-  call alloc_error(pname,"xyz_fc",1,__LINE__,__FILE__,ierr, &
-    error_message)
+  if ( .not. allocated(xyz_fc) ) then
+    allocate(xyz_fc(1:nr,1:lface),source=ten12,stat=ierr, &
+      errmsg=error_message)
+    call alloc_error(pname,"xyz_fc",1,__LINE__,__FILE__,ierr, &
+      error_message)
+  end if
   !
   ic = 0
   do nf = 1,lface
