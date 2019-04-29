@@ -57,6 +57,9 @@ module geovar
   integer, public, save :: n_totnod
   integer, public, save :: n_totpts
   !
+  ! n_wall_flx_pts : the number of flux points on the wall faces
+  integer, public, save :: n_wall_flx_pts
+  !
   ! cell_geom : this gives the geometry of each cell
   !
   integer, public, save, allocatable, dimension(:) :: cell_geom
@@ -465,7 +468,7 @@ module geovar
   !                 [1,nfbnd].
   ! wall_face_idx_inv : it stores the inverse index.
   integer, public, save, allocatable :: wall_face_idx(:)
-  integer, public, save, allocatable :: wall_face_idx_inv(:)
+  ! integer, public, save, allocatable :: wall_face_idx_inv(:)
   ! integer, public, save, allocatable :: global_wall_face_idx(:)
   !
 contains

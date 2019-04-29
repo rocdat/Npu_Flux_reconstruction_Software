@@ -1995,12 +1995,15 @@ end subroutine create_bc_in
 subroutine initialize_wall_faces
   !
   ! Use Statements
-  use geovar, only : bface,nfbnd,wall_face_idx,wall_face_idx_inv
+  use geovar, only : nfbnd,wall_face_idx,n_wall_flx_pts
+  use geovar, only : face,bface
+  use order_mod, only : geom_solpts
   !
   ! Formal Arguments
   !
   ! Local Varaibles
   integer :: n,nf,ierr
+  integer :: this_geom,this_order
   !
   ! Local Parameter
   character(len=*), parameter :: pname = "initialize_wall_faces"
@@ -2013,13 +2016,14 @@ continue
   allocate ( wall_face_idx(1:nfbnd), source=0, stat=ierr, errmsg=error_message)
   call alloc_error(pname,"wall_face_idx",1,__LINE__,__FILE__,ierr,error_message)
   !
-  allocate ( wall_face_idx_inv(1:nfbnd), source=0, stat=ierr, &
-    errmsg=error_message)
-  call alloc_error(pname,"wall_face_idx_inv",1,__LINE__,__FILE__,ierr, &
-    error_message)
+  ! allocate ( wall_face_idx_inv(1:nfbnd), source=0, stat=ierr, &
+  !   errmsg=error_message)
+  ! call alloc_error(pname,"wall_face_idx_inv",1,__LINE__,__FILE__,ierr, &
+  !   error_message)
   !
   ! Find the wall surfaces
   n = 0
+  n_wall_flx_pts = 0
   do nf = 1,nfbnd
     !
     if ( any( bc_walls == bface(1,nf) ) ) then
@@ -2027,7 +2031,17 @@ continue
       ! This nf is a wall face. Store nf.
       n = n + 1
       wall_face_idx(n) = nf
-      wall_face_idx_inv(nf) = n
+      ! wall_face_idx_inv(nf) = n
+      !
+      ! Geometry of this wall face
+      this_geom = face(nf)%geom
+      !
+      ! Polynomial order for this grid cell
+      !
+      this_order = face(nf)%order
+      !
+      n_wall_flx_pts = n_wall_flx_pts + geom_solpts( this_geom, this_order )
+      !
     end if
     !
   end do

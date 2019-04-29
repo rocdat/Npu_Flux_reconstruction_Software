@@ -82,7 +82,6 @@ module io_mod
   integer(CST), save :: n_wall_output_pts
   integer(CST), save :: wall_pts_beg
   integer(CST), save :: wall_pts_end
-  integer, save :: n_wall_flx_pts
   !
   ! DISABLE_CGNS_OUTPUT: Private module variable to disable CGNS output. It
   !                      is currently only relevant to the Taylor-Green Vortex
@@ -5571,6 +5570,7 @@ continue
   !
   if (output_time_averaging) then
     call write_parallel_cgns_time_ave_file
+    call write_parallel_cgns_wall_time_ave_file
   end if
   !
   ! ################################################
@@ -6947,9 +6947,6 @@ continue
   end if
   !
   ! Now create the output data and write it to the CGNS file in parallel
-  ! FIXME: Should we interpolate uavesp from the solution points to the output
-  ! points? The grid coordinates have been transformed before they are dumped
-  ! out to the CGNS file.
   !
   do n = 1,naq
     !
@@ -7029,15 +7026,16 @@ end subroutine write_parallel_cgns_time_ave_file
 subroutine write_parallel_cgns_wall_grid_file()
   !
   !.. Use Statements ..
-  use geovar, only : nr
-  use geovar, only : wall_face_idx,face,xyz_fp
+  use geovar, only : nr,nfbnd,n_wall_flx_pts
+  use geovar, only : face,xyz_fp
   use order_mod, only : geom_solpts
+  use geovar, only : bface
   !
   !.. Local Scalars ..
   integer :: ierr,n,nf,nfp,i
-  !
   integer(CST) :: wall_cells_beg,wall_cells_end
   integer(CST) :: n_total_wall_output_cells
+  integer :: wfp_count,fp_count
   !
   character(len=CGLEN) :: varname
   !
@@ -7081,7 +7079,7 @@ continue
   ! nr == 3 means that the wall faces are quadrilaterals
   !
   call cg_base_write_f(ifile_n,base_name,int(nr-1,kind=CBT), &
-                       int(nr,kind=CBT),ibase_n,cgierr)
+                       int(nr-1,kind=CBT),ibase_n,cgierr)
   call cgns_error(pname,cgns_wall_grid_file,"cg_base_write_f", &
                   cgierr,__LINE__,__FILE__)
   !
@@ -7121,12 +7119,29 @@ continue
   do n = 1,nr
     !
     ! Save the current coordinate to the local array vartmp
+    ! By using wfp_count and fp_count, mixing mesh of quad and tri on the wall
+    ! is accounted.
+    wfp_count = 0
+    fp_count = 0
     !
-    do i = 1,size(wall_face_idx)
-      nf = wall_face_idx(i)
+    face_loop : do nf = 1,nfbnd
+      !
       nfp = geom_solpts( face(nf)%geom, face(nf)%order )
-      vartmp((i-1)*nfp+1:i*nfp) = xyz_fp(n,(nf-1)*nfp+1:nf*nfp)
-    end do
+      !
+      if ( all(bface(1,nf) /= bc_walls)) then
+        !
+        ! Not a wall
+        fp_count = fp_count + nfp
+        cycle face_loop
+        !
+      end if
+      !
+      vartmp(wfp_count+1:wfp_count+nfp) = xyz_fp(n,fp_count+1:fp_count+nfp)
+      !
+      wfp_count = wfp_count + nfp
+      fp_count = fp_count + nfp
+      !
+    end do face_loop
     !
     ! Interpolate vartmp to the desired output locations and
     ! convert to the real type required for the CGNS file.
@@ -7215,6 +7230,264 @@ continue
   call debug_timer(leaving_procedure,pname)
   !
 end subroutine write_parallel_cgns_wall_grid_file
+!
+!###############################################################################
+!
+subroutine write_parallel_cgns_wall_time_ave_file()
+  !
+  !.. Use Statements ..
+  use geovar,  only : nr,n_solpts,n_wall_flx_pts
+  use ovar,    only : aref ! ,rhoref,tref,tkeref,tlsref
+  use ovar,    only : interpolate_before_output_variable
+  use ovar,    only : profile_io_cgns
+  use flowvar, only : tauw_aver_fp
+  !
+  !.. Local Scalars ..
+  integer :: n,naq,ierr
+  !
+  real(wp) :: beg_wall_time
+  real(wp) :: end_wall_time
+  !
+  character(len=CGLEN) :: varname
+  character(len=CGLEN) :: sect_name
+  character(len=170)   :: cgns_wall_sol_file
+  character(len=300)   :: link_path
+  !
+  integer(CBT) :: ifile_s,ibase_s,izone_s,isol_s
+  !
+  !.. Local Allocatable Arrays ..
+  integer(CBT),  allocatable :: isvar_s(:)
+  !
+  real(wp), allocatable :: vartmp(:)
+  real(wp), allocatable :: var_dim(:)
+  !
+  !.. Local Parameters ..
+  character(len=*), parameter :: pname="write_parallel_cgns_wall_time_ave_file"
+  character(len=*), parameter :: tname="TimeAveragedWallSolution"
+  character(len=*), parameter :: fname="solution.wall_time_ave.cgns"
+  !
+continue
+  !
+  ! Now, only the tauw is dumped out. So naq = 1.
+  ! 2019-04-29, 13:22:31
+  naq = 1
+  !
+  call debug_timer(entering_procedure,pname)
+#ifdef PBS_ENV
+  call mpi_barrier(MPI_COMM_WORLD,mpierr)
+  if (mypnum == glb_root) then
+    write (iout,1)
+    flush (iout)
+    if (profile_io_cgns) beg_wall_time = mpi_wtime()
+  end if
+  call mpi_barrier(MPI_COMM_WORLD,mpierr)
+#endif
+  !
+#ifndef SPECIAL_FOR_PGI
+  !
+  cgns_wall_sol_file = trim(adjustl(cgns_dir)) // fname
+  !
+  ! Open the CGNS solution file if iflag is 1
+  !
+  call cgp_open_f(cgns_wall_sol_file,CG_MODE_WRITE,ifile_s,cgierr)
+  call io_error(pname,cgns_wall_sol_file,1,__LINE__,__FILE__,cgierr)
+  !
+  ! Set the CGNS base (who knows what this is for)
+  !
+  call cg_base_write_f(ifile_s,base_name,int(nr-1,kind=CBT), &
+                       int(nr-1,kind=CBT),ibase_s,cgierr)
+  call cgns_error(pname,cgns_wall_sol_file,"cg_base_write_f", &
+                  cgierr,__LINE__,__FILE__)
+  !
+  ! Write the title for this solution
+  !
+  call cg_zone_write_f(ifile_s,ibase_s,zone_name,wall_zone_size, &
+                       UNSTRUCTURED,izone_s,cgierr)
+  call cgns_error(pname,cgns_wall_sol_file,"cg_zone_write_f", &
+                  cgierr,__LINE__,__FILE__)
+  !
+  ! Create a link to the grid coordinates in the grid file
+  !
+  call cg_goto_f(ifile_s,ibase_s,cgierr, &
+                 "Zone_t",izone_s, &
+                 CGNS_GOTO_END)
+  call cgns_error(pname,cgns_wall_sol_file,"cg_goto_f",cgierr,__LINE__,__FILE__)
+  !
+  link_path = base_name//"/"//zone_name//"/GridCoordinates"
+  !
+  call cg_link_write_f("GridCoordinates",trim(cgns_wall_grid_fname), &
+                       trim(link_path),cgierr)
+  call cgns_error(pname,cgns_wall_sol_file,"cg_link_write_f(GridCoordinates)", &
+                  cgierr,__LINE__,__FILE__)
+  !
+  ! Create a link to the element connectivity in the grid file
+  !
+  if (nr == 2) then
+    sect_name = "Lines"
+  else if (nr == 3) then
+    sect_name = "Quadrilaterals"
+  end if
+  link_path = base_name//"/"//zone_name//"/"//trim(sect_name)
+  !
+  call cg_link_write_f(trim(sect_name),trim(cgns_wall_grid_fname), &
+                       trim(link_path),cgierr)
+  call cgns_error(pname,cgns_wall_sol_file, &
+                  "cg_link_write_f("//trim(sect_name)//")", &
+                  cgierr,__LINE__,__FILE__)
+  !
+  ! Allocate isvar_s and var_dim to the number of time averaged variables
+  !
+  allocate ( isvar_s(1:naq) , source=0 , stat=ierr , errmsg=error_message )
+  call alloc_error(pname,"isvar_s",1,__LINE__,__FILE__,ierr,error_message)
+  !
+  allocate ( var_dim(1:naq) , source=one , stat=ierr , errmsg=error_message )
+  call alloc_error(pname,"var_dim",1,__LINE__,__FILE__,ierr,error_message)
+  !
+  ! Write the flow variables
+  !
+  call cg_sol_write_f(ifile_s,ibase_s,izone_s,tname,VERTEX,isol_s,cgierr)
+  call cgns_error(pname,cgns_wall_sol_file,"cg_sol_write_f", &
+    cgierr,__LINE__,__FILE__)
+  !
+  ! ##############################################################
+  ! #####   WRITING TIME AVERAGED SOLUTION FIELD VARIABLES   #####
+  ! ##############################################################
+  !
+  ! Create data nodes for the time-averaged solution variables
+  !
+  ! Currently it only involves tauw
+  !
+  n = 1
+  varname = "SkinFrictionMagnitude"
+  var_dim(n) = var_dim(n) * aref
+  !
+  call cgp_field_write_f(ifile_s,ibase_s,izone_s,isol_s,CGNS_KIND_REAL, &
+                        trim(adjustl(varname)),isvar_s(n),cgierr)
+  call cgns_error(pname,cgns_wall_sol_file,"cgp_field_write_f", &
+                  cgierr,__LINE__,__FILE__, &
+                  "Write node: Time-averaged variable",n)
+  !
+  ! Preallocate var for writing variables in the correct precision
+  ! to the CGNS file
+  !
+  if (.not. allocated(var)) then
+    allocate ( var(1:n_wall_output_pts) , source=real(0,CRT) , &
+               stat=ierr , errmsg=error_message )
+    call alloc_error(pname,"var",1,__LINE__,__FILE__,ierr,error_message)
+  end if
+  !
+  ! Now create the output data and write it to the CGNS file in parallel
+  !
+  vartmp = tauw_aver_fp(1:n_wall_flx_pts) * var_dim(n) ! F2003 AUTO-REALLOCATION
+  call cgns_write_wall_surface_parallel
+  !
+  ! ################################################
+  ! #####   FINISHED WRITING FIELD VARIABLES   #####
+  ! ################################################
+  !
+  call set_cgns_queue(STOP_CGNS_QUEUE,pname,cgns_wall_sol_file)
+  !
+  ! Close the CGNS FILE
+  !
+  call cgp_close_f(ifile_s,cgierr)
+  call io_error(pname,cgns_grid_file,2,__LINE__,__FILE__,cgierr)
+  !
+#endif
+  !
+  ! Deallocate the arrays var and vartmp
+  !
+  if (allocated(var)) then
+    deallocate ( var , stat=ierr , errmsg=error_message )
+    call alloc_error(pname,"var",2,__LINE__,__FILE__,ierr,error_message)
+  end if
+  if (allocated(vartmp)) then
+    deallocate ( vartmp , stat=ierr , errmsg=error_message )
+    call alloc_error(pname,"vartmp",2,__LINE__,__FILE__,ierr,error_message)
+  end if
+  if (allocated(isvar_s)) then
+    deallocate ( isvar_s , stat=ierr , errmsg=error_message )
+    call alloc_error(pname,"isvar_s",2,__LINE__,__FILE__,ierr,error_message)
+  end if
+  if (allocated(var_dim)) then
+    deallocate ( var_dim , stat=ierr , errmsg=error_message )
+    call alloc_error(pname,"var_dim",2,__LINE__,__FILE__,ierr,error_message)
+  end if
+  !
+#ifdef PBS_ENV
+  call mpi_barrier(MPI_COMM_WORLD,mpierr)
+  if (mypnum == glb_root) then
+    if (profile_io_cgns) then
+      end_wall_time = mpi_wtime()
+      write (iout,2) trim(adjustl(cgns_wall_sol_file)), &
+                     end_wall_time - beg_wall_time
+    else
+      write (iout,2)
+    end if
+    flush (iout)
+  end if
+  call mpi_barrier(MPI_COMM_WORLD,mpierr)
+#endif
+  call debug_timer(leaving_procedure,pname)
+  !
+  ! Format Statements
+  !
+  1 format (/," Entering write_parallel_cgns_time_ave_file")
+  2 format (" Leaving write_parallel_cgns_time_ave_file",/,:, &
+          5x,"Wall time taken to write the file '",a, &
+             "' = ",f12.6," seconds",/)
+  !
+  !-----------------------------------------------------------------------------
+  !
+  contains
+  !
+  subroutine cgns_write_wall_surface_parallel()
+    !
+    ! This routine is placed here simply to prevent from having to place this
+    ! whole chunk of code after each variable that needs to be written to the
+    ! CGNS file. Everything used here is inherited from the parent routine.
+    !
+  continue
+    !
+    if (interpolate_before_output_variable) then
+      var = real( vartmp , kind(var) )
+    else
+      var(:) = real( interpolate_for_output_wall_face(vartmp) , kind(var) )
+    end if
+    !
+    ! Perform some quick modifications to make sure all values in var
+    ! are valid before writing to the CGNS file
+    !
+    where (is_nan(var)) var = zero
+    where (.not. is_finite(var))
+      var = merge(-1.0e+10_CRT,1.0e+10_CRT,is_negative(var))
+     !where (is_negative(var))
+     !  var = -1.0e+10_CRT
+     !else where
+     !  var =  1.0e+10_CRT
+     !end where
+    end where
+    !
+    ! Reset the queue.
+    !
+    call set_cgns_queue(BEGIN_CGNS_QUEUE,pname,cgns_wall_sol_file)
+    !
+    ! Add the data for current variable to the output queue.
+    !
+    call cgp_field_write_data_f(ifile_s,ibase_s,izone_s,isol_s,isvar_s(n), &
+                                wall_pts_beg,wall_pts_end,var,cgierr)
+    call cgns_error(pname,cgns_wall_sol_file,"cgp_field_write_data_f", &
+                    cgierr,__LINE__,__FILE__,"Write data: Solution variable",n)
+    !
+    ! Finally, flush the queue containing
+    ! the current variable to the CGNS file.
+    !
+    call flush_cgns_queue(pname,cgns_wall_sol_file)
+    !
+  end subroutine cgns_write_wall_surface_parallel
+  !
+  !-----------------------------------------------------------------------------
+  !
+end subroutine write_parallel_cgns_wall_time_ave_file
 !
 !###############################################################################
 !
@@ -7559,7 +7832,6 @@ continue
              stat=ierr , errmsg=error_message )
   call alloc_error(pname,"ipelem",1,__LINE__,__FILE__,ierr,error_message)
   !
-  n_wall_flx_pts = 0
   nf = 0
   p1 = wall_pts_beg
   !
@@ -7571,8 +7843,6 @@ continue
     ! Polynomial order for this grid cell
     !
     this_order = face(wall_face_idx(this_face))%order
-    !
-    n_wall_flx_pts = n_wall_flx_pts + geom_solpts( this_geom, this_order )
     !
     ! Number of solution points for this cell geometry at this order
     !

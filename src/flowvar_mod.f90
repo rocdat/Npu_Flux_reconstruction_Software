@@ -60,10 +60,10 @@ module flowvar
   character(len=4), public, save, allocatable :: time_ave_variables(:)
   !
   ! tauw_fp: instantaneous tau_w at the flux points at the wall faces
-  real(wp), public, save, allocatable :: tauw_fp(:,:)
+  real(wp), public, save, allocatable :: tauw_fp(:)
   !
   ! tauw_aver_fp: time averaged tau_w at the flux points at the wall faces
-  real(wp), public, save, allocatable :: tauw_aver_fp(:,:)
+  real(wp), public, save, allocatable :: tauw_aver_fp(:)
   !
   ! FACE_XYZ : Derived type containing a set of variables at the flux/face
   !            points on each side of a face between cells

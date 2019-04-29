@@ -441,7 +441,6 @@ subroutine correct_interface_flux_visc(time_step,rk_step)
   use correction_mod,    only : correct
   use flowvar,           only : usp,residual,faceflx,faceusp,facedusp
   use flowvar,           only : tauw_fp
-  use geovar,            only : wall_face_idx_inv
   !
   !.. Formal Arguments ..
   integer, intent(in) :: time_step
@@ -456,6 +455,7 @@ subroutine correct_interface_flux_visc(time_step,rk_step)
   integer  :: left_cell,left_geom,left_order
   integer  :: right_cell,right_geom,right_order
   real(wp) :: ds,dsl,dsr,cmat_val
+  integer  :: wfp_count
   !
   character(len=300) :: fpf_fname
   !
@@ -497,6 +497,9 @@ continue
   ! Loop through the boundary faces to apply the correction
   ! due to the boundary fluxes.
   !
+  ! set the count of the wall flux point
+  wfp_count = 0
+  !
   boundary_fluxes: do nf = 1,nfbnd
     !
     face_geom  = face(nf)%geom  ! geometry of face
@@ -537,6 +540,8 @@ continue
       unrm(:) = unit_vector( rnrm(:,k) )
       !
       ! Get the inviscid upwind flux at the current flux point
+      ! FIXME: This if branch is better to be put before the k=1,nfp loop.
+      ! That is more efficient.
       !
       if (any(bface(1,nf) == bc_walls)) then
         !
@@ -556,7 +561,8 @@ continue
             !
             ! Wall friction is the wall-parallel component of the wall normal
             ! flux.
-            tauw_fp(k,wall_face_idx_inv(nf)) = calc_tauw(vflx,unrm)
+            wfp_count = wfp_count + 1
+            tauw_fp(wfp_count) = calc_tauw(vflx,unrm)
             !
           end if
           !

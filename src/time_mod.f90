@@ -1136,13 +1136,11 @@ end subroutine rupdate_TVD4_RK
 subroutine initialize_time_ave()
   !
   !.. Use Statements ..
-  use geovar,  only : nr,n_solpts
+  use geovar,  only : nr,n_solpts,n_wall_flx_pts
   use ovar,    only : time,ave_start_time
   use ovar,    only : time_ave_vel_is_axisymm
   use flowvar, only : time_ave_variables
   use flowvar, only : uavesp,tauw_aver_fp,tauw_fp
-  use geovar,  only : wall_face_idx,face
-  use order_mod, only : geom_solpts,maxFP
   !
   !.. Local Scalars ..
   integer :: l,m,nv,nvar,ierr
@@ -1373,14 +1371,12 @@ continue
   ! Currently it includes only y^+.
   if (.not. allocated(tauw_aver_fp)) then
     !
-    n_wall_face = size(wall_face_idx)
-    !
-    allocate ( tauw_aver_fp(1:maxFP,1:n_wall_face), source=zero, &
+    allocate ( tauw_aver_fp(1:n_wall_flx_pts), source=zero, &
                stat=ierr, errmsg=error_message)
     call alloc_error(pname,"tauw_aver_fp",1,__LINE__,__FILE__,ierr, &
       error_message)
     !
-    allocate ( tauw_fp(1:maxFP,1:n_wall_face), source=zero, &
+    allocate ( tauw_fp(1:n_wall_flx_pts), source=zero, &
                stat=ierr, errmsg=error_message)
     call alloc_error(pname,"tauw_fp",1,__LINE__,__FILE__,ierr, &
       error_message)
@@ -1509,7 +1505,7 @@ continue
     ! ave_var(nq+3) = ct*ave_var(nm2) - st*ave_var(nm1)
     !
     ! First, update the time-averaged conservative variables
-  uavesp(1:nq,:) = a*uavesp(1:nq,1:n_solpts) + b*usp(1:nq,1:n_solpts)
+  uavesp(1:nq,1:n_solpts) = a*uavesp(1:nq,1:n_solpts) + b*usp(1:nq,1:n_solpts)
     ! do m = 1,nq
     !   uavesp(m,n) = a*uavesp(m,n) + b*usp(m,n)
     ! end do
