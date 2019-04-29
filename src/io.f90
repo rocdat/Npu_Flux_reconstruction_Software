@@ -43,9 +43,12 @@ module io_mod
   !.. Output File Names ..
   character(len=*),   parameter :: cgns_base_fname = "solution.grid.cgns"
   character(len=*),   parameter :: cgns_grid_fname = "solution.grid.cgns"
+  character(len=*),   parameter :: cgns_wall_grid_fname = &
+    "solution.wall_grid.cgns"
   character(len=*),   parameter :: cgns_time_fname = "solution.time.cgns"
   character(len=170),      save :: cgns_dir = ""
   character(len=170),      save :: cgns_grid_file
+  character(len=170),      save :: cgns_wall_grid_file
   character(len=170),      save :: cgns_time_file
   !
   character(len=170),      save :: cgnsfile_fmt
@@ -74,6 +77,12 @@ module io_mod
   !
   integer(CST), dimension(1:3) :: zone_size
   !
+  !.. CGNS Parallel Point Indices for wall grid
+  integer(CST), save :: n_wall_output_pts
+  integer(CST), save :: wall_pts_beg
+  integer(CST), save :: wall_pts_end
+  integer, save :: n_wall_flx_pts
+  !
   ! DISABLE_CGNS_OUTPUT: Private module variable to disable CGNS output. It
   !                      is currently only relevant to the Taylor-Green Vortex
   !                      problem and is more of a temporary addition until the
@@ -92,6 +101,12 @@ module io_mod
     module procedure interpolate_for_output_1d, &
                      interpolate_for_output_2d
   end interface interpolate_for_output
+  !
+  ! 
+  interface interpolate_for_output_wall_face
+    module procedure interpolate_for_output_1d_wall_face !, &
+                     ! interpolate_for_output_2d
+  end interface interpolate_for_output_wall_face
   !
   integer, save :: current_cell
   integer, save :: save_n1
@@ -5517,6 +5532,10 @@ continue
     !
     call write_parallel_cgns_grid_file
     !
+    ! Create the CGNS grid file for the wall surface
+    !
+    call write_parallel_cgns_wall_grid_file
+    !
     ! Initialize the zone counter
     !
     cgns_zone_counter = 0
@@ -6927,6 +6946,9 @@ continue
   end if
   !
   ! Now create the output data and write it to the CGNS file in parallel
+  ! FIXME: Should we interpolate uavesp from the solution points to the output
+  ! points? The grid coordinates have been transformed before they are dumped
+  ! out to the CGNS file.
   !
   do n = 1,naq
     !
@@ -7000,6 +7022,198 @@ continue
   !-----------------------------------------------------------------------------
   !
 end subroutine write_parallel_cgns_time_ave_file
+!
+!###############################################################################
+!
+subroutine write_parallel_cgns_wall_grid_file()
+  !
+  !.. Use Statements ..
+  use geovar, only : nr
+  use geovar, only : wall_face_idx,face,xyz_fp
+  use order_mod, only : geom_solpts
+  !
+  !.. Local Scalars ..
+  integer :: ierr,n,nf,nfp,i
+  !
+  integer(CST) :: wall_cells_beg,wall_cells_end
+  integer(CST) :: n_total_wall_output_cells
+  !
+  character(len=CGLEN) :: varname
+  !
+  !.. Local Arrays ..
+  integer(CBT) :: ixyz_n(1:nr)
+  !
+  !.. Local Allocatable Arrays ..
+  integer(CST), allocatable :: ipelem(:,:)
+  real(wp),     allocatable :: vartmp(:)
+  !
+  !.. Local Parameters ..
+  character(len=*), parameter :: pname = "write_parallel_cgns_wall_grid_file"
+  character(len=*), parameter :: char_xyz(1:3) = ["X","Y","Z"]
+  !
+continue
+  !
+  call debug_timer(entering_procedure,pname)
+  !
+  cgns_wall_grid_file = trim(adjustl(cgns_dir)) // cgns_wall_grid_fname
+  !
+  ! Initialize the variables and data arrays needed for CGNS output
+  ! NOTE: This call to routine get_initial_data_for_cgns will initialize
+  !       the module variables wall_pts_beg, wall_pts_end, n_wall_output_pts,
+  !       n_wall_flx_pts.
+  !
+  call get_initial_data_for_cgns_wall(wall_cells_beg,wall_cells_end,ipelem)
+  !
+  ! Extract the total number of faces from the zone_size array
+  !
+  n_total_wall_output_cells = zone_size(2)
+  !
+  ! Open the cgns grid file
+  !
+  call cgp_open_f(cgns_wall_grid_file,CG_MODE_WRITE,ifile_n,cgierr)
+  call cgns_error(pname,cgns_wall_grid_file,"cgp_open_f", &
+                  cgierr,__LINE__,__FILE__, &
+                  "Mode = CG_MODE_WRITE")
+  !
+  ! Set the CGNS base
+  ! nr == 2 means that the wall faces are lines
+  ! nr == 3 means that the wall faces are quadrilaterals
+  !
+  call cg_base_write_f(ifile_n,base_name,int(nr-1,kind=CBT), &
+                       int(nr,kind=CBT),ibase_n,cgierr)
+  call cgns_error(pname,cgns_wall_grid_file,"cg_base_write_f", &
+                  cgierr,__LINE__,__FILE__)
+  !
+  ! Write the title for this solution
+  !
+  call cg_zone_write_f(ifile_n,ibase_n,zone_name,zone_size, &
+                       UNSTRUCTURED,izone_n,cgierr)
+  call cgns_error(pname,cgns_wall_grid_file,"cg_zone_write_f", &
+                  cgierr,__LINE__,__FILE__)
+  !
+  ! Create data nodes for the coordinates
+  !
+  do n = 1,nr
+    varname = "Coordinate"//char_xyz(n)
+    call cgp_coord_write_f(ifile_n,ibase_n,izone_n,CGNS_KIND_REAL, &
+                           trim(varname),ixyz_n(n),cgierr)
+    call cgns_error(pname,cgns_wall_grid_file,"cgp_coord_write_f", &
+                    cgierr,__LINE__,__FILE__,"Write node: Coordinate",n)
+  end do
+  !
+  ! Now create and write the coordinate data in parallel
+  !
+  ! Allocate the temporary variable arrays
+  !
+  allocate ( vartmp(1:n_wall_flx_pts) , source=zero , &
+             stat=ierr , errmsg=error_message )
+  call alloc_error(pname,"vartmp",1,__LINE__,__FILE__,ierr,error_message)
+  !
+  allocate ( var(1:n_wall_output_pts) , source=real(0,CRT) , &
+             stat=ierr , errmsg=error_message )
+  call alloc_error(pname,"var",1,__LINE__,__FILE__,ierr,error_message)
+  !
+  ! Stop/Disable the CGNS queue if it is not to be used
+  !
+  call disable_cgns_queue(pname,cgns_wall_grid_file)
+  !
+  do n = 1,nr
+    !
+    ! Save the current coordinate to the local array vartmp
+    !
+    do i = 1,size(wall_face_idx)
+      nf = wall_face_idx(i)
+      nfp = geom_solpts( face(nf)%geom, face(nf)%order )
+      vartmp((i-1)*nfp+1:i*nfp) = xyz_fp(n,(nf-1)*nfp+1:nf*nfp)
+    end do
+    !
+    ! Interpolate vartmp to the desired output locations and
+    ! convert to the real type required for the CGNS file.
+    !
+    var(:) = real( interpolate_for_output_wall_face(vartmp) , &
+      kind(var) )
+    !
+    ! Reset the queue. Only for CGNS version < 3.3
+    !
+    call set_cgns_queue(BEGIN_CGNS_QUEUE,pname,cgns_wall_grid_file)
+    !
+    ! Add the data for current coordinate variable to the output queue.
+    !
+    call cgp_coord_write_data_f(ifile_n,ibase_n,izone_n,ixyz_n(n), &
+                                wall_pts_beg,wall_pts_end,var,cgierr)
+    call cgns_error(pname,cgns_wall_grid_file,"cgp_coord_write_data_f", &
+                    cgierr,__LINE__,__FILE__,"Write data: Coordinate",n)
+    !
+    ! Finally, flush the queue containing the
+    ! current coordinate variable to the CGNS file.
+    ! Only for CGNS version < 3.3
+    !
+    call flush_cgns_queue(pname,cgns_wall_grid_file)
+    !
+  end do
+  !
+  ! Deallocate the var and vartmp arrays
+  !
+  if (allocated(var)) then
+    deallocate ( var , stat=ierr , errmsg=error_message )
+    call alloc_error(pname,"var",2,__LINE__,__FILE__,ierr,error_message)
+  end if
+  if (allocated(vartmp)) then
+    deallocate ( vartmp , stat=ierr , errmsg=error_message )
+    call alloc_error(pname,"vartmp",2,__LINE__,__FILE__,ierr,error_message)
+  end if
+  !
+  ! Create the data node for the grid connectivity
+  ! nr == 2 means that the wall faces are lines
+  ! nr == 3 means that the wall faces are quadrilaterals
+  ! FIXME: What if there are triangles?
+  !
+  if (nr == 2) then
+    call cgp_section_write_f(ifile_n,ibase_n,izone_n,"Lines", &
+                             BAR_2,1_CST,n_total_wall_output_cells, &
+                             0_CBT,isect_n,cgierr)
+  else if (nr == 3) then
+    call cgp_section_write_f(ifile_n,ibase_n,izone_n,"Quadrilaterals", &
+                             QUAD_4,1_CST,n_total_wall_output_cells, &
+                             0_CBT,isect_n,cgierr)
+  end if
+  call cgns_error(pname,cgns_wall_grid_file,"cgp_section_write_f", &
+                  cgierr,__LINE__,__FILE__)
+  !
+  ! Write the element connectivity in parallel
+  !
+  ! Reset the queue. Only for CGNS version < 3.3
+  !
+  call set_cgns_queue(BEGIN_CGNS_QUEUE,pname,cgns_wall_grid_file)
+  !
+  ! Add the element connectivity data to the output queue.
+  !
+  call cgp_elements_write_data_f(ifile_n,ibase_n,izone_n,isect_n, &
+                                 wall_cells_beg,wall_cells_end,ipelem,cgierr)
+  call cgns_error(pname,cgns_wall_grid_file,"cgp_elements_write_data_f", &
+                  cgierr,__LINE__,__FILE__)
+  !
+  ! Finally, flush the queue containing the
+  ! element connectivity to the CGNS file.
+  !
+  call flush_cgns_queue(pname,cgns_wall_grid_file)
+  !
+  ! Deallocate ipelem
+  !
+  if (allocated(ipelem)) then
+    deallocate ( ipelem , stat=ierr , errmsg=error_message )
+    call alloc_error(pname,"ipelem",2,__LINE__,__FILE__,ierr,error_message)
+  end if
+  !
+  ! Close the CGNS FILE
+  !
+  call cgp_close_f(ifile_n,cgierr)
+  call cgns_error(pname,cgns_wall_grid_file,"cgp_close_f", &
+                  cgierr,__LINE__,__FILE__)
+  !
+  call debug_timer(leaving_procedure,pname)
+  !
+end subroutine write_parallel_cgns_wall_grid_file
 !
 !###############################################################################
 !
@@ -7203,6 +7417,204 @@ continue
             " within a 3D grid. This configuration is currently not supported.")
   !
 end subroutine get_initial_data_for_cgns
+!
+!###############################################################################
+!
+subroutine get_initial_data_for_cgns_wall(wall_cells_beg,wall_cells_end,ipelem)
+  !
+  !.. Use Statements ..
+  use geovar,       only : pst_geom
+  use geovar,       only : wall_face_idx
+  use geovar,       only : global_face,face
+  use parallel_mod, only : face_map
+  use order_mod,    only : o_order,geom_solpts
+  !
+  !.. Formal Arguments ..
+  integer(CST),              intent(inout) :: wall_cells_beg
+  integer(CST),              intent(inout) :: wall_cells_end
+  integer(CST), allocatable, intent(inout) :: ipelem(:,:)
+  !
+  !.. Local Scalars ..
+  integer :: ierr,icpu,nf,wfi,np,n
+  integer :: this_subfaces
+  integer :: gmin,gmax
+  integer :: this_face,this_geom
+  integer :: this_order,output_order
+  !
+  integer(CST) :: this_npts,p1
+  integer(CST) :: n_wall_output_cells
+  integer(CST) :: n_total_wall_output_pts
+  integer(CST) :: n_total_wall_output_cells
+  !
+  !.. Local Parameters ..
+  character(len=*), parameter :: pname = "get_initial_data_for_cgns_wall"
+  !
+continue
+  !
+  call debug_timer(entering_procedure,pname)
+  !
+  ! n_total_output_wall_pts: total number of output points for the global
+  !                          wall grid
+  ! n_total_output_wall_cells: total number of output cells for the global
+  !                            wall grid
+  n_total_wall_output_pts = 0_CST
+  n_total_wall_output_cells = 0_CST
+  !
+  gmin = Geom_Max + 1
+  gmax = Geom_Min - 1
+  !
+  ! Loop local wall faces to get the number of local wall output pts and cells
+  do icpu = 1,ncpu
+    !
+    if (icpu-1 == mypnum) then
+      wall_pts_beg = n_total_wall_output_pts + 1_CST
+      wall_cells_beg = n_total_wall_output_cells + 1_CST
+    end if
+    !
+    face_loop : do nf = 1,size(face_map(icpu)%loc_to_glb)
+      !
+      if ( all ( global_face(face_map(icpu)%loc_to_glb(nf))%bc_type &
+        /= bc_walls ) ) then
+        !
+        ! This is not a wall face
+        cycle face_loop
+        !
+      end if
+      !
+      ! Geometry of this grid face.
+      this_geom = global_face(face_map(icpu)%loc_to_glb(nf))%geom
+      !
+      gmin = min(gmin, this_geom)
+      gmax = max(gmax, this_geom)
+      !
+      ! Polynomial order for this grid face
+      this_order = global_face(face_map(icpu)%loc_to_glb(nf))%order
+      !
+      ! Number of solution points for this face geometry at this order
+      output_order = max(this_order,o_order)
+      !
+      this_npts = int(geom_solpts(this_geom,output_order),kind=kind(this_npts))
+      !
+      ! Get the number of subfaces for this face geometry at this order.
+      ! The number of subfaces is basically:
+      !     this_order**(spatial dimension of this_geom) or
+      ! NOTE: Make sure that the number of subfaces is at least 1,
+      !       particularly for the case of this_order=0
+      this_subfaces = max( 1 , output_order**geom_dimen(this_geom) )
+      !
+      ! Add the number of solution points for this face geometry at
+      ! this order to the running count of the total number of
+      ! output solution points.
+      n_total_wall_output_pts = n_total_wall_output_pts + &
+        int( this_npts, kind=kind(n_total_wall_output_pts) )
+      !
+      ! Add the number of subfaces for this face geometry at this order
+      ! to the running count of the total number of output
+      ! subfaces.
+      n_total_wall_output_cells = n_total_wall_output_cells + &
+        int( this_subfaces, kind=kind(n_total_wall_output_cells) )
+      !
+    end do face_loop
+    !
+    if (icpu-1 == mypnum) then
+      wall_pts_end = n_total_wall_output_pts
+      wall_cells_end = n_total_wall_output_cells
+    end if
+    !
+  end do
+  !
+  ! n_wall_output_pts: number of output points for this processor
+  n_wall_output_pts = wall_pts_end - wall_pts_beg + 1_CST
+  ! n_wall_output_cells: number of output cell for this processor
+  n_wall_output_cells = wall_cells_end - wall_cells_beg + 1_CST
+  ! Save n_total_output_pts and n_total_output_cells to zone_size
+  zone_size = [n_total_wall_output_pts,n_total_wall_output_cells,0_CST]
+  !
+  ! Some quick stuff needed before creating the connectivity array
+  if (any(Geom_Unknown == [gmin,gmax])) then
+    write (error_message,1)
+    call stop_gfr(stop_mpi,pname,__LINE__,__FILE__,error_message)
+  else if (geom_dimen(gmin) /= geom_dimen(gmax)) then
+    write (error_message,2)
+    call stop_gfr(stop_mpi,pname,__LINE__,__FILE__,error_message)
+  end if
+  !
+  ! Get the number of nodes needed to define grid cells of this dimension
+  ! NOTE: We will be creating degenerate grid cells for unstructured type
+  !       cells such as Geom_Tria,Geom_Tetr,Geom_Pyra,Geom_Pris.
+  ! Therefore, the number of nodes needed are:
+  !         Geom_0D  => 2**0 = 1
+  !         Geom_1D  => 2**1 = 2
+  !         Geom_2D  => 2**2 = 4
+  np = 2**geom_dimen(gmin)
+  !
+  ! Create the connectivity array
+  if (allocated(ipelem)) then
+    deallocate ( ipelem , stat=ierr , errmsg=error_message )
+    call alloc_error(pname,"ipelem",2,__LINE__,__FILE__,ierr,error_message)
+  end if
+  !
+  allocate ( ipelem(1:np,1:n_wall_output_cells) , source=0_CST , &
+             stat=ierr , errmsg=error_message )
+  call alloc_error(pname,"ipelem",1,__LINE__,__FILE__,ierr,error_message)
+  !
+  n_wall_flx_pts = 0
+  nf = 0
+  p1 = wall_pts_beg
+  !
+  do this_face = 1,size(wall_face_idx)
+    !
+    ! Geometry of this wall face
+    this_geom = face(wall_face_idx(this_face))%geom
+    !
+    ! Polynomial order for this grid cell
+    !
+    this_order = face(wall_face_idx(this_face))%order
+    !
+    n_wall_flx_pts = n_wall_flx_pts + geom_solpts( this_geom, this_order )
+    !
+    ! Number of solution points for this cell geometry at this order
+    !
+    output_order = max(this_order,o_order)
+    !
+    this_npts = int(geom_solpts(this_geom,output_order),kind=kind(this_npts))
+    !
+    ! Get the number of subcells for this cell geometry at this order.
+    ! The number of subcells is basically:
+    !     this_order**(spatial dimension of this_geom) or
+    ! NOTE: Make sure that the number of subcells is at least 1,
+    !       particularly for the case of this_order=0
+    !
+    this_subfaces = max( 1 , output_order**geom_dimen(this_geom) )
+    !
+    ! Loop through the number of subcells and add the subconnectivity
+    ! to the first solution point of the current grid cell to get the
+    ! connectivity for the current subcell.
+    !
+    do n = 1,this_subfaces
+      !
+      nf = nf + 1
+      !
+      ipelem(:,nf) = p1 + int( pst_geom(this_geom,output_order)% &
+                                              connectivity(:,n) , &
+                               kind=kind(ipelem) )
+      !
+    end do
+    !
+    p1 = p1 + this_npts
+    !
+  end do
+  !
+  call debug_timer(leaving_procedure,pname)
+  !
+  ! Format Statements
+  !
+  1 format (" A grid cell of an unknown geometry type was found!")
+  2 format (" The minimum and maximum dimensions of the grid cells do not", &
+            " match. For example, this would happen if there is a 2D cell", &
+            " within a 3D grid. This configuration is currently not supported.")
+  !
+end subroutine get_initial_data_for_cgns_wall
 !
 !###############################################################################
 !
@@ -8264,6 +8676,94 @@ continue
   end if
   !
 end function interpolate_for_output_2d
+!
+!###############################################################################
+!
+pure function interpolate_for_output_1d_wall_face(array) &
+    result(return_value)
+  !
+  !... calculates d(utd)/dt
+  !
+  !.. Use Statements ..
+  ! use geovar,  only : n_flxpts ! ,n_global_solpts
+  use geovar,  only : face,wall_face_idx
+  ! use geovar,  only : global_pinc_ptr
+  ! use geovar,  only : global_cell_geom
+  ! use geovar,  only : global_cell_order
+  use order_mod, only : geom_solpts
+  use interpolation_mod, only : outerp
+  !
+  !.. Formal Arguments ..
+  real(wp), dimension(:), intent(in) :: array
+  !
+  !.. Function Return Value ..
+  real(wp), dimension(1:n_wall_output_pts) :: return_value
+  !
+  !.. Local Scalars ..
+  integer :: i1,i2,nf,n1,n2,nfp
+  integer :: this_geom,this_order
+  !
+continue
+  !
+  ! Interpolate the data depending on if we are working on
+  ! a local or global data array.
+  !
+  i2 = 0
+  !
+  ! if (size(array) == n_global_solpts) then
+  !   !
+  !   do nc = 1,n_global_cell
+  !     !
+  !     this_geom = global_cell_geom(nc)
+  !     this_order = global_cell_order(nc)
+  !     !
+  !     n1 = global_pinc_ptr(nc)+1
+  !     n2 = global_pinc_ptr(nc+1)
+  !     np = n2-n1+1
+  !     !
+  !     if (allocated(outerp(this_geom,this_order)%output)) then
+  !       i1 = i2 + 1
+  !       i2 = i2 + size(outerp(this_geom,this_order)%output%mat,dim=1)
+  !       return_value(i1:i2) = outerp(this_geom,this_order)% &
+  !                                                   output% &
+  !                             mv_mult( array(n1:n2) )
+  !     else
+  !       i1 = i2 + 1
+  !       i2 = i2 + np
+  !       return_value(i1:i2) = array(n1:n2)
+  !     end if
+  !     !
+  !   end do
+  !   !
+  ! else
+    !
+    n2 = 0
+    do nf = 1,size(wall_face_idx)
+      !
+      this_geom = face(wall_face_idx(nf))%geom
+      this_order = face(wall_face_idx(nf))%order
+      !
+      nfp = geom_solpts(this_geom,this_order)
+      n1 = n2 + 1
+      n2 = n2 + nfp
+      !
+      if (allocated(outerp(this_geom,this_order)%output)) then
+        i1 = i2 + 1
+        i2 = i2 + size(outerp(this_geom,this_order)%output%mat,dim=1)
+        return_value(i1:i2) = outerp(this_geom,this_order)% &
+                                                    output% &
+                              mv_mult( array(n1:n2) )
+      else
+        i1 = i2 + 1
+        i2 = i2 + nfp
+        return_value(i1:i2) = array(n1:n2)
+      end if
+      !
+    end do
+    !
+  ! end if
+  !
+end function interpolate_for_output_1d_wall_face
 !
 !###############################################################################
 !
