@@ -53,6 +53,9 @@ module io_mod
   !
   character(len=170),      save :: cgnsfile_fmt
   !
+  ! wall solution time averaged CGNS file name format
+  character(len=170),      save :: wst_cgnsfile_fmt
+  !
   !.. CGNS Path Variables ..
   integer(CBT),      save :: ifile_n
   integer(CBT),      save :: ibase_n
@@ -5501,6 +5504,7 @@ subroutine write_parallel_cgns(iflag)
   character(len=CGLEN) :: tname
   character(len=100)   :: char_num
   character(len=170)   :: sol_file
+  character(len=170)   :: wall_sol_taver_fname
   !
   !.. Local Parameters ..
   character(len=*), parameter :: pname = "write_parallel_cgns"
@@ -5528,6 +5532,8 @@ continue
     !
     write (cgnsfile_fmt,3) final_iter_digits
     !
+    write (wst_cgnsfile_fmt,5) final_iter_digits
+    !
     ! Create the CGNS grid file
     !
     call write_parallel_cgns_grid_file
@@ -5548,8 +5554,10 @@ continue
  !write (sol_file,'("solution.",i0,".cgns")') cgns_zone_counter
   if (iflag == -3) then
     write (sol_file,cgnsfile_fmt) itcur-1,".NaN"
+    write (wall_sol_taver_fname,wst_cgnsfile_fmt) itcur,".NaN"
   else
     write (sol_file,cgnsfile_fmt) itcur,""
+    write (wall_sol_taver_fname,wst_cgnsfile_fmt) itcur,""
   end if
   !
   ! Reallocate the soltime and solname arrays so we
@@ -5570,7 +5578,7 @@ continue
   !
   if (output_time_averaging) then
     call write_parallel_cgns_time_ave_file
-    call write_parallel_cgns_wall_time_ave_file
+    call write_parallel_cgns_wall_time_ave_file(wall_sol_taver_fname)
   end if
   !
   ! ################################################
@@ -5598,6 +5606,7 @@ continue
   2 format (a," = ",i0)
   3 format ("('solution.',i0.",i0,",a,'.cgns')")
   4 format (i0)
+  5 format ("('solution.wall_time_aver.',i0.",i0,",a,'.cgns')")
   !
 end subroutine write_parallel_cgns
 !
@@ -7233,7 +7242,7 @@ end subroutine write_parallel_cgns_wall_grid_file
 !
 !###############################################################################
 !
-subroutine write_parallel_cgns_wall_time_ave_file()
+subroutine write_parallel_cgns_wall_time_ave_file(wall_sol_taver_fname)
   !
   !.. Use Statements ..
   use geovar,  only : nr,n_solpts,n_wall_flx_pts
@@ -7242,6 +7251,8 @@ subroutine write_parallel_cgns_wall_time_ave_file()
   use ovar,    only : profile_io_cgns
   use flowvar, only : tauw_aver_fp
   !
+  ! Formal Arguments
+  character(len=*), intent(in) :: wall_sol_taver_fname
   !.. Local Scalars ..
   integer :: n,naq,ierr
   !
@@ -7264,7 +7275,6 @@ subroutine write_parallel_cgns_wall_time_ave_file()
   !.. Local Parameters ..
   character(len=*), parameter :: pname="write_parallel_cgns_wall_time_ave_file"
   character(len=*), parameter :: tname="TimeAveragedWallSolution"
-  character(len=*), parameter :: fname="solution.wall_time_ave.cgns"
   !
 continue
   !
@@ -7285,7 +7295,7 @@ continue
   !
 #ifndef SPECIAL_FOR_PGI
   !
-  cgns_wall_sol_file = trim(adjustl(cgns_dir)) // fname
+  cgns_wall_sol_file = trim(adjustl(cgns_dir)) // wall_sol_taver_fname
   !
   ! Open the CGNS solution file if iflag is 1
   !
