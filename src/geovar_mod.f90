@@ -305,6 +305,7 @@ module geovar
   !
   type(face_t), public, save, allocatable :: face(:)
   !
+  type(face_t), public, save, allocatable :: global_face(:)
   !
   !
   !
@@ -463,6 +464,7 @@ module geovar
   ! wall_face_idx_inv : it stores the inverse index.
   integer, public, save, allocatable :: wall_face_idx(:)
   integer, public, save, allocatable :: wall_face_idx_inv(:)
+  ! integer, public, save, allocatable :: global_wall_face_idx(:)
   !
 contains
 !

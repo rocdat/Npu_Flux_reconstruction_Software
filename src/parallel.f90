@@ -334,6 +334,10 @@ end subroutine create_serial_cell_map
 !
 subroutine create_serial_face_map(lface)
   !
+  ! Use Statements
+  use geovar, only : face
+  use geovar, only : global_face
+  !
   !.. Formal Arguments ..
   integer, intent(in) :: lface
   !
@@ -356,6 +360,11 @@ continue
   call alloc_error(pname,"face_map(1)%loc_to_glb",1,__LINE__,__FILE__,ierr, &
                    error_message)
   !
+  ! Save the global face_map. I should move this to another place.
+  allocate(global_face,source=face,stat=ierr,errmsg=error_message)
+  call alloc_error(pname,"global_face_map",1,__LINE__,__FILE__,ierr, &
+    error_message)
+  !
   call debug_timer(leaving_procedure,pname)
   !
 end subroutine create_serial_face_map
@@ -367,6 +376,7 @@ subroutine partition_grid(npart,metis_option_requested,bface,nodes_of_cell, &
   !
   !.. Use Statements ..
   use ovar, only : continuous_output
+  use geovar, only : global_face
   !
   !.. Formal Arguments ..
   integer,                                  intent(in) :: npart
@@ -585,6 +595,11 @@ continue
                            cells_with_edge_ptr,edge_map)
     end if
     !
+    ! Save the global face_map
+    allocate(global_face,source=face,stat=ierr,errmsg=error_message)
+    call alloc_error(pname,"global_face_map",1,__LINE__,__FILE__,ierr, &
+      error_message)
+    !
     ! Deallocate cells_with_node and cells_with_node_ptr
     ! since they are no longer needed
     !
@@ -605,6 +620,11 @@ continue
 #endif
     !
   end if
+  call mpi_barrier(MPI_COMM_WORLD,mpierr)
+  !
+  ! Communicate global_face to all processors
+  call bcast_global_face_array(global_face)
+  !
   call mpi_barrier(MPI_COMM_WORLD,mpierr)
   !
   ! Deallocate epart, cells_with_edge, and cells_with_edge_ptr
@@ -3632,6 +3652,95 @@ continue
   1 format (a,"_map(",i0,")%loc_to_glb")
   !
 end subroutine bcast_each_fp_and_map_array
+!
+!###############################################################################
+!
+subroutine bcast_global_face_array(global_face)
+  !
+  ! Use Statements
+  !
+  ! Formal Arguments
+  type(face_t), allocatable, intent(inout) :: global_face(:)
+  !
+  ! Local Scalar
+  integer :: ierr
+  integer :: iface,nface
+  !
+  ! Local Parameter
+  character(len=*), parameter :: pname = "bcast_global_face_array"
+  integer, parameter :: nele=14
+  !
+  ! Local Array
+  integer, allocatable :: temp_array(:)
+  !
+continue
+  !
+  call debug_timer(entering_procedure,pname)
+  !
+  if (i_am_host_root) then
+    !
+    nface = size(global_face)
+    !
+    allocate(temp_array(1:nface*nele),source=0,stat=ierr,errmsg=error_message)
+    call alloc_error(pname,"temp_array",1,__LINE__,__FILE__,ierr,error_message)
+    ! Collect the array element into a new arry
+    do iface = 1,nface
+      temp_array((iface-1)*nele+1) = global_face(iface)%geom
+      temp_array((iface-1)*nele+2) = global_face(iface)%order
+      temp_array((iface-1)*nele+3:(iface-1)*nele+6)=global_face(iface)%nodes(:)
+      temp_array((iface-1)*nele+7) = global_face(iface)%left%cell
+      temp_array((iface-1)*nele+8) = global_face(iface)%left%cell_face
+      temp_array((iface-1)*nele+9) = global_face(iface)%left%fp_offset
+      temp_array((iface-1)*nele+10) = global_face(iface)%left%rotation
+      temp_array((iface-1)*nele+11) = global_face(iface)%right%cell
+      temp_array((iface-1)*nele+12) = global_face(iface)%right%cell_face
+      temp_array((iface-1)*nele+13) = global_face(iface)%right%fp_offset
+      temp_array((iface-1)*nele+14) = global_face(iface)%right%rotation
+    end do
+    !
+  end if
+  !
+  ! Broadcast the number of global faces
+  call mpi_bcast(nface,1,mpi_inttyp,glb_root,MPI_COMM_WORLD,mpierr)
+  ! 
+  if (.not. i_am_host_root) then
+    !
+    ! Allocate
+    allocate(global_face(1:nface),stat=ierr,errmsg=error_message)
+    call alloc_error(pname,"global_face_map",1,__LINE__,__FILE__,ierr, &
+      error_message)
+    !
+    allocate(temp_array(1:nface*nele),source=0,stat=ierr,errmsg=error_message)
+    call alloc_error(pname,"temp_array",1,__LINE__,__FILE__,ierr,error_message)
+    !
+  end if
+  !
+  ! Broadcast the temp_array
+  call mpi_bcast(temp_array,size(temp_array,kind=int_mpi),mpi_inttyp, &
+    glb_root,MPI_COMM_WORLD,mpierr)
+  ! 
+  if (.not. i_am_host_root) then
+    !
+    do iface = 1,nface
+      !
+      global_face(iface)%geom = temp_array((iface-1)*nele+1)
+      global_face(iface)%order = temp_array((iface-1)*nele+2)
+      global_face(iface)%nodes(:)=temp_array((iface-1)*nele+3:(iface-1)*nele+6)
+      global_face(iface)%left%cell = temp_array((iface-1)*nele+7)
+      global_face(iface)%left%cell_face = temp_array((iface-1)*nele+8)
+      global_face(iface)%left%fp_offset = temp_array((iface-1)*nele+9)
+      global_face(iface)%left%rotation = temp_array((iface-1)*nele+10)
+      global_face(iface)%right%cell = temp_array((iface-1)*nele+11)
+      global_face(iface)%right%cell_face = temp_array((iface-1)*nele+12)
+      global_face(iface)%right%fp_offset = temp_array((iface-1)*nele+13)
+      global_face(iface)%right%rotation = temp_array((iface-1)*nele+14)
+    end do
+    !
+  end if
+  !
+  call debug_timer(leaving_procedure,pname)
+  !
+end subroutine bcast_global_face_array
 !
 !###############################################################################
 !
