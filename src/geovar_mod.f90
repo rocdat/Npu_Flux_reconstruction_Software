@@ -3,6 +3,7 @@ module geovar
   use module_kind_types, only : wp,lk,iout,int_mpi
   use module_kind_types, only : Geom_Min,Geom_Max,Geom_Name
   use module_kind_types, only : geom_family_t,Complete
+  use module_kind_types, only : not_a_bc
   !
   implicit none
   !
@@ -299,6 +300,7 @@ module geovar
     !        side(1) is the same as the left  component
     !        side(2) is the same as the right component
    !type(cell_on_face_t) :: side(1:2)
+    integer :: bc_type = not_a_bc
   end type face_t
   !
   ! FACE : Array of type face_t that contains information for all grid faces

@@ -1004,6 +1004,8 @@ continue
     !
     faces_of_cell(host_side,host_cell) = nf
     !
+    face(nf)%bc_type = bface(1,nf)
+    !
   end do
   !
   call debug_timer(stop_timer,"section 2")

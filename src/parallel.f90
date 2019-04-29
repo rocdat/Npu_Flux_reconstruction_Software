@@ -3668,7 +3668,7 @@ subroutine bcast_global_face_array(global_face)
   !
   ! Local Parameter
   character(len=*), parameter :: pname = "bcast_global_face_array"
-  integer, parameter :: nele=14
+  integer, parameter :: nele=15
   !
   ! Local Array
   integer, allocatable :: temp_array(:)
@@ -3696,6 +3696,7 @@ continue
       temp_array((iface-1)*nele+12) = global_face(iface)%right%cell_face
       temp_array((iface-1)*nele+13) = global_face(iface)%right%fp_offset
       temp_array((iface-1)*nele+14) = global_face(iface)%right%rotation
+      temp_array((iface-1)*nele+15) = global_face(iface)%bc_type
     end do
     !
   end if
@@ -3734,6 +3735,7 @@ continue
       global_face(iface)%right%cell_face = temp_array((iface-1)*nele+12)
       global_face(iface)%right%fp_offset = temp_array((iface-1)*nele+13)
       global_face(iface)%right%rotation = temp_array((iface-1)*nele+14)
+      global_face(iface)%bc_type = temp_array((iface-1)*nele+15)
     end do
     !
   end if
