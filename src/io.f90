@@ -76,6 +76,7 @@ module io_mod
   integer(CST), save :: my_pts_end
   !
   integer(CST), dimension(1:3) :: zone_size
+  integer(CST), dimension(1:3) :: wall_zone_size
   !
   !.. CGNS Parallel Point Indices for wall grid
   integer(CST), save :: n_wall_output_pts
@@ -7064,9 +7065,9 @@ continue
   !
   call get_initial_data_for_cgns_wall(wall_cells_beg,wall_cells_end,ipelem)
   !
-  ! Extract the total number of faces from the zone_size array
+  ! Extract the total number of faces from the wall_zone_size array
   !
-  n_total_wall_output_cells = zone_size(2)
+  n_total_wall_output_cells = wall_zone_size(2)
   !
   ! Open the cgns grid file
   !
@@ -7086,7 +7087,7 @@ continue
   !
   ! Write the title for this solution
   !
-  call cg_zone_write_f(ifile_n,ibase_n,zone_name,zone_size, &
+  call cg_zone_write_f(ifile_n,ibase_n,zone_name,wall_zone_size, &
                        UNSTRUCTURED,izone_n,cgierr)
   call cgns_error(pname,cgns_wall_grid_file,"cg_zone_write_f", &
                   cgierr,__LINE__,__FILE__)
@@ -7527,8 +7528,8 @@ continue
   n_wall_output_pts = wall_pts_end - wall_pts_beg + 1_CST
   ! n_wall_output_cells: number of output cell for this processor
   n_wall_output_cells = wall_cells_end - wall_cells_beg + 1_CST
-  ! Save n_total_output_pts and n_total_output_cells to zone_size
-  zone_size = [n_total_wall_output_pts,n_total_wall_output_cells,0_CST]
+  ! Save n_total_output_pts and n_total_output_cells to wall_zone_size
+  wall_zone_size = [n_total_wall_output_pts,n_total_wall_output_cells,0_CST]
   !
   ! Some quick stuff needed before creating the connectivity array
   if (any(Geom_Unknown == [gmin,gmax])) then
