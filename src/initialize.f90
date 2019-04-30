@@ -335,9 +335,10 @@ continue
   !
   call initialize_wall_faces
   !
-  ! Output the boundary conditions
+  ! Output the boundary conditions.
+  ! This subroutine is not working. Do not use it.
   !
-  call write_bc_conditions
+  ! call write_bc_conditions
   !
   ! Output the free-stream conditions
   !
@@ -2061,160 +2062,164 @@ end subroutine initialize_wall_faces
 !
 !###############################################################################
 !
-subroutine write_bc_conditions
-  !
-  !.. Use Statements ..
-  use geovar, only : nr,bface
-  use ovar,   only : bc_input,bc_in
-  use ovar,   only : tmin,tmax,tref,rgasref
-  use ovar,   only : rhoref,aref,gam
-  !
-  !.. Local Scalars ..
-  integer     :: i,ii,nf,bc_type
-  real(wp)    :: r,p,t,r0,p0,t0,mach,aspd,visc,reyn
-  real(wp)    :: alpha,beta,rhoa2,total_cond
-  real(wp)    :: gm1,gam_over_gm1,one_over_gm1
-  !
-  !.. Local Arrays ..
-  real(wp) :: vel(1:nr)
-  !
-  !.. Local Parameters ..
-  character(len=*), parameter :: pname = "create_bc_in"
-  !
-continue
-  !
-  rhoa2 = rhoref * aref * aref
-  gm1 = gam - one
-  one_over_gm1 = one / gm1
-  gam_over_gm1 = gam*one_over_gm1
-  !
-  ! Output all the boundary conditions
-  !
-  do i = lbound(bc_in,dim=1),ubound(bc_in,dim=1)
-    !
-    if (mypnum == glb_root) then
-      !
-      if (i == 0) then
-        write (iout,1)
-      else
-        !
-        bc_type_loop: do nf = 1,size(bface,dim=2)
-          if (any(bface(1,nf) == bc_comm) .or. bface(5,nf) == 0) then
-            cycle bc_type_loop
-          end if
-          if (bface(6,nf) == i) then
-            bc_type = bface(1,nf)
-            exit bc_type_loop
-          end if
-        end do bc_type_loop
-        !
-        write (iout,2) i,trim(adjustl(bc_input(bc_in(i)%bc_input_idx)%name)), &
-                         trim(adjustl(bc_integer_to_string(bc_type)))
-        !
-      end if
-      !
-      if ( (bc_in(i)%wall_temperature*tref >= tmin) .and. &
-           (bc_in(i)%wall_temperature*tref <= tmax) ) then
-        !
-        vel(1:nr) = bc_in(i)%pv(nmb:nme)*aref
-        !
-        write (iout,3) bc_in(i)%wall_temperature*tref, &
-                       (vel(ii),ii=1,nr)
-        !
-      else
-        !
-        r = bc_in(i)%pv(nec)*rhoref
-        p = bc_in(i)%pv(nee)*rhoa2
-        t = temperature_pv_sp(bc_in(i)%pv)*tref
-        !
-        vel(1:nr) = bc_in(i)%pv(nmb:nme)*aref
-        !
-        aspd = sqrt(gam*rgasref*t)
-        mach = aref*norm2(bc_in(i)%pv(nmb:nme)) / aspd
-        !
-        total_cond = one + half*gm1*mach*mach
-        !
-        r0 = r * total_cond**one_over_gm1
-        p0 = p * total_cond**gam_over_gm1
-        t0 = t * total_cond
-        !
-        alpha = zero
-        beta = zero
-        if (nr >= 2) then
-          alpha = atan2(bc_in(i)%pv(nmy),bc_in(i)%pv(nmx))
-          if (nr == 3) then
-            beta = asin(bc_in(i)%pv(nmz)/norm2(bc_in(i)%pv(nmb:nme)))
-          end if
-        end if
-        alpha = alpha * radians2degrees
-        beta = beta * radians2degrees
-        !
-        visc = viscosity_pv_sp( [r,vel,p] )
-        !
-        reyn = norm2(vel)*r/visc
-        !
-        write (iout,4) r,(vel(ii),ii=1,nr)
-        write (iout,5) p,t,mach,aspd,r0,p0,t0,alpha,beta,visc,reyn
-        !
-      end if
-      !
-      flush (iout)
-      !
-    end if
-    !
-    ii = 0
-    bface_loop: do nf = 1,size(bface,dim=2)
-      !
-      if (any(bface(1,nf) == bc_comm) .or. bface(5,nf) == 0) cycle bface_loop
-      !
-      if (bface(6,nf) == i) then
-        ii = ii + 1
-      end if
-      !
-    end do bface_loop
-    !
-    call mpi_allreduce(MPI_IN_PLACE,ii,1_int_mpi,mpi_inttyp, &
-                       MPI_SUM,MPI_COMM_WORLD,mpierr)
-    !
-    if (mypnum == glb_root) then
-      write (iout,6) ii
-      flush (iout)
-    end if
-    !
-  end do
-  !
-  if (ncpu > 1) then
-    if (mypnum == glb_root) flush (iout)
-    call mpi_barrier(MPI_COMM_WORLD,mpierr)
-  end if
-  !
-  ! Format Statements
-  !
-  1 format (/," Flow conditions for BC # 0 - Reference/Freestream BCs")
-  2 format (/," Flow conditions for BC # ",i0," - '",a,"'",/, &
-              4x,"BC Type = ",a)
-  3 format (4x,"Wall Temperature      = ",es14.6," K",/, &
-            4x,"X-velocity            = ",es14.6," m/s",/,:, &
-            4x,"Y-velocity            = ",es14.6," m/s",/,:, &
-            4x,"Z-velocity            = ",es14.6," m/s",/)
-  4 format (4x,"Static Density        = ",es14.6," kg/m^3",/, &
-            4x,"X-velocity            = ",es14.6," m/s",:,/, &
-            4x,"Y-velocity            = ",es14.6," m/s",:,/, &
-            4x,"Z-velocity            = ",es14.6," m/s")
-  5 format (4x,"Static Pressure       = ",es14.6," N/m^2",/, &
-            4x,"Static Temperature    = ",es14.6," K",/, &
-            4x,"Mach Number           = ",es14.6,/, &
-            4x,"Speed of Sound        = ",es14.6," m/s",/, &
-            4x,"Total Density         = ",es14.6," kg/m^3",/, &
-            4x,"Total Pressure        = ",es14.6," N/m^2",/, &
-            4x,"Total Temperature     = ",es14.6," K",/, &
-            4x,"Alpha Angle of Attack = ",es14.6," degrees",/, &
-            4x,"Beta  Angle of Attack = ",es14.6," degrees",/, &
-            4x,"Viscosity             = ",es14.6," kg/(m*s)",/, &
-            4x,"Reynolds #            = ",es14.6,/)
-  6 format (4x,"Number of boundary faces for this BC = ",i0)
-  !
-end subroutine write_bc_conditions
+! This subroutine is not working. Dischard this subroutine.
+!
+! subroutine write_bc_conditions
+!   !
+!   !.. Use Statements ..
+!   use geovar, only : nr,bface
+!   use ovar,   only : bc_input,bc_in
+!   use ovar,   only : tmin,tmax,tref,rgasref
+!   use ovar,   only : rhoref,aref,gam
+!   !
+!   !.. Local Scalars ..
+!   integer     :: i,ii,nf,bc_type
+!   real(wp)    :: r,p,t,r0,p0,t0,mach,aspd,visc,reyn
+!   real(wp)    :: alpha,beta,rhoa2,total_cond
+!   real(wp)    :: gm1,gam_over_gm1,one_over_gm1
+!   !
+!   !.. Local Arrays ..
+!   real(wp) :: vel(1:nr)
+!   !
+!   !.. Local Parameters ..
+!   character(len=*), parameter :: pname = "create_bc_in"
+!   !
+! continue
+!   !
+!   rhoa2 = rhoref * aref * aref
+!   gm1 = gam - one
+!   one_over_gm1 = one / gm1
+!   gam_over_gm1 = gam*one_over_gm1
+!   !
+!   ! Output all the boundary conditions
+!   ! bc_in contains global info for all bc in all processors. However, bface
+!   ! is a local array containing only the local bc info in this processor.
+!   ! This loop is not working in parallel mode.
+!   do i = lbound(bc_in,dim=1),ubound(bc_in,dim=1)
+!     !
+!     if (mypnum == glb_root) then
+!       !
+!       if (i == 0) then
+!         write (iout,1)
+!       else
+!         !
+!         bc_type_loop: do nf = 1,size(bface,dim=2)
+!           if (any(bface(1,nf) == bc_comm) .or. bface(5,nf) == 0) then
+!             cycle bc_type_loop
+!           end if
+!           if (bface(6,nf) == i) then
+!             bc_type = bface(1,nf)
+!             exit bc_type_loop
+!           end if
+!         end do bc_type_loop
+!         !
+!         write (iout,2) i,trim(adjustl(bc_input(bc_in(i)%bc_input_idx)%name)), &
+!                          trim(adjustl(bc_integer_to_string(bc_type)))
+!         !
+!       end if
+!       !
+!       if ( (bc_in(i)%wall_temperature*tref >= tmin) .and. &
+!            (bc_in(i)%wall_temperature*tref <= tmax) ) then
+!         !
+!         vel(1:nr) = bc_in(i)%pv(nmb:nme)*aref
+!         !
+!         write (iout,3) bc_in(i)%wall_temperature*tref, &
+!                        (vel(ii),ii=1,nr)
+!         !
+!       else
+!         !
+!         r = bc_in(i)%pv(nec)*rhoref
+!         p = bc_in(i)%pv(nee)*rhoa2
+!         t = temperature_pv_sp(bc_in(i)%pv)*tref
+!         !
+!         vel(1:nr) = bc_in(i)%pv(nmb:nme)*aref
+!         !
+!         aspd = sqrt(gam*rgasref*t)
+!         mach = aref*norm2(bc_in(i)%pv(nmb:nme)) / aspd
+!         !
+!         total_cond = one + half*gm1*mach*mach
+!         !
+!         r0 = r * total_cond**one_over_gm1
+!         p0 = p * total_cond**gam_over_gm1
+!         t0 = t * total_cond
+!         !
+!         alpha = zero
+!         beta = zero
+!         if (nr >= 2) then
+!           alpha = atan2(bc_in(i)%pv(nmy),bc_in(i)%pv(nmx))
+!           if (nr == 3) then
+!             beta = asin(bc_in(i)%pv(nmz)/norm2(bc_in(i)%pv(nmb:nme)))
+!           end if
+!         end if
+!         alpha = alpha * radians2degrees
+!         beta = beta * radians2degrees
+!         !
+!         visc = viscosity_pv_sp( [r,vel,p] )
+!         !
+!         reyn = norm2(vel)*r/visc
+!         !
+!         write (iout,4) r,(vel(ii),ii=1,nr)
+!         write (iout,5) p,t,mach,aspd,r0,p0,t0,alpha,beta,visc,reyn
+!         !
+!       end if
+!       !
+!       flush (iout)
+!       !
+!     end if
+!     !
+!     ii = 0
+!     bface_loop: do nf = 1,size(bface,dim=2)
+!       !
+!       if (any(bface(1,nf) == bc_comm) .or. bface(5,nf) == 0) cycle bface_loop
+!       !
+!       if (bface(6,nf) == i) then
+!         ii = ii + 1
+!       end if
+!       !
+!     end do bface_loop
+!     !
+!     call mpi_allreduce(MPI_IN_PLACE,ii,1_int_mpi,mpi_inttyp, &
+!                        MPI_SUM,MPI_COMM_WORLD,mpierr)
+!     !
+!     if (mypnum == glb_root) then
+!       write (iout,6) ii
+!       flush (iout)
+!     end if
+!     !
+!   end do
+!   !
+!   if (ncpu > 1) then
+!     if (mypnum == glb_root) flush (iout)
+!     call mpi_barrier(MPI_COMM_WORLD,mpierr)
+!   end if
+!   !
+!   ! Format Statements
+!   !
+!   1 format (/," Flow conditions for BC # 0 - Reference/Freestream BCs")
+!   2 format (/," Flow conditions for BC # ",i0," - '",a,"'",/, &
+!               4x,"BC Type = ",a)
+!   3 format (4x,"Wall Temperature      = ",es14.6," K",/, &
+!             4x,"X-velocity            = ",es14.6," m/s",/,:, &
+!             4x,"Y-velocity            = ",es14.6," m/s",/,:, &
+!             4x,"Z-velocity            = ",es14.6," m/s",/)
+!   4 format (4x,"Static Density        = ",es14.6," kg/m^3",/, &
+!             4x,"X-velocity            = ",es14.6," m/s",:,/, &
+!             4x,"Y-velocity            = ",es14.6," m/s",:,/, &
+!             4x,"Z-velocity            = ",es14.6," m/s")
+!   5 format (4x,"Static Pressure       = ",es14.6," N/m^2",/, &
+!             4x,"Static Temperature    = ",es14.6," K",/, &
+!             4x,"Mach Number           = ",es14.6,/, &
+!             4x,"Speed of Sound        = ",es14.6," m/s",/, &
+!             4x,"Total Density         = ",es14.6," kg/m^3",/, &
+!             4x,"Total Pressure        = ",es14.6," N/m^2",/, &
+!             4x,"Total Temperature     = ",es14.6," K",/, &
+!             4x,"Alpha Angle of Attack = ",es14.6," degrees",/, &
+!             4x,"Beta  Angle of Attack = ",es14.6," degrees",/, &
+!             4x,"Viscosity             = ",es14.6," kg/(m*s)",/, &
+!             4x,"Reynolds #            = ",es14.6,/)
+!   6 format (4x,"Number of boundary faces for this BC = ",i0)
+!   !
+! end subroutine write_bc_conditions
 !
 !###############################################################################
 !
