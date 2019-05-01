@@ -471,6 +471,27 @@ module geovar
   ! integer, public, save, allocatable :: wall_face_idx_inv(:)
   ! integer, public, save, allocatable :: global_wall_face_idx(:)
   !
+  !
+  type :: bg_cpbc_grid_t
+    !
+    integer :: nv
+    integer :: ns
+    !
+    real(wp) :: vl
+    real(wp) :: vh
+    real(wp) :: dv
+    !
+    real(wp) :: sl
+    real(wp) :: sh
+    real(wp) :: ds
+    !
+    real(wp), allocatable :: v(:)
+    real(wp), allocatable :: s(:)
+    !
+  end type bg_cpbc_grid_t
+  !
+  type(bg_cpbc_grid_t), public, save, allocatable :: bg_cpbc_grid
+  !
 contains
 !
 !###############################################################################

@@ -84,6 +84,9 @@ continue
   !
   call create_bc_in
   !
+  ! Create the background mesh on the inflow BC
+  call create_bg_bc_grid
+  !
   ! Initialize all local pointers to disassociated
   !
   numer2init => null()
@@ -2059,6 +2062,148 @@ continue
   call debug_timer(leaving_procedure,pname)
   !
 end subroutine initialize_wall_faces
+!
+!###############################################################################
+!
+subroutine create_bg_bc_grid
+  !
+  ! Use Statements
+  use geovar, only : bg_cpbc_grid
+  use geovar, only : nr
+  use ovar, only : bc_in,bg_cpbc_input
+  !
+  ! Formal Arguments
+  !
+  ! Local Varaibles
+  integer :: ierr,ibc,nbc
+  !
+  ! Local Parameter
+  character(len=*), parameter :: pname = "create_bg_bc_grid"
+  !
+continue
+  !
+  call debug_timer(entering_procedure,pname)
+  !
+  ! Loop BCs to check if the custom profile BC is specified. If so, create the
+  ! background mesh on the specified boundary.
+  ! bc_in(0) is the reference condition. So we need to reduce the size by 1
+  nbc = size(bc_in) - 1
+  bc_loop : do ibc = 1,nbc
+    !
+    if ( bc_in(ibc)%bc_type == bc_custom_profile ) then
+      exit bc_loop
+    end if
+    !
+  end do bc_loop
+  !
+  if ( ibc == nbc+1 ) then
+    !
+    ! Custom profile BC is not found. Do not need the background mesh on the
+    ! boundary.
+    return
+    !
+  end if
+  !
+  ! The custom profile BC is found. Generate the background mesh on the
+  ! boundary.
+  allocate(bg_cpbc_grid,stat=ierr,errmsg=error_message)
+  call alloc_error(pname,"bg_cpbc_grid",1,__LINE__,__FILE__,ierr,error_message)
+  !
+  ! Calculate other parameters based on the input parameters
+  if (nr == 2) then
+    !
+    ! 2D simulation. So the boundary is 1D.
+    if ( trim(adjustl(bg_cpbc_input%loc_str)) == 'X' ) then
+      !
+      ! This boundary is located on the X plane. It means X = const.
+      !
+      bg_cpbc_grid%nv = bg_cpbc_input%ny
+      !
+      bg_cpbc_grid%vl = bg_cpbc_input%yl
+      bg_cpbc_grid%vh = bg_cpbc_input%yh
+      !
+    else if ( trim(adjustl(bg_cpbc_input%loc_str)) == 'Y' ) then
+      !
+      ! This boundary is located on the Y plane. It means Y = const.
+      !
+      bg_cpbc_grid%nv = bg_cpbc_input%nx
+      !
+      bg_cpbc_grid%vl = bg_cpbc_input%xl
+      bg_cpbc_grid%vh = bg_cpbc_input%xh
+      !
+    else
+      !
+      ! bg_cpbc_loc_str is undefined.
+      call stop_gfr(stop_mpi,pname,__LINE__,__FILE__, &
+        "Location plane of the custom profile BC (bg_cpbc_input%loc_str) " &
+        // "should be X or Y!")
+      !
+    end if
+    !
+    bg_cpbc_grid%dv = (bg_cpbc_grid%vh - bg_cpbc_grid%vl) &
+      / bg_cpbc_grid%nv
+    ! F2003 Auto Reallocation
+    bg_cpbc_grid%v = bg_cpbc_grid%vl &
+      + intseq(0,bg_cpbc_grid%nv) * bg_cpbc_grid%dv
+    !
+  else if (nr == 3) then
+    !
+    ! 3D simulation. So the boundary is 2D.
+    if ( trim(adjustl(bg_cpbc_input%loc_str)) == 'X' ) then
+      !
+      ! This boundary is located on the XY plane.
+      !
+      bg_cpbc_grid%nv = bg_cpbc_input%ny
+      bg_cpbc_grid%ns = bg_cpbc_input%nz
+      !
+      bg_cpbc_grid%vl = bg_cpbc_input%yl
+      bg_cpbc_grid%sl = bg_cpbc_input%zl
+      bg_cpbc_grid%vh = bg_cpbc_input%yh
+      bg_cpbc_grid%sh = bg_cpbc_input%zh
+      !
+    else if ( trim(adjustl(bg_cpbc_input%loc_str)) == 'Y' ) then
+      !
+      ! This boundary is located on the XZ plane.
+      !
+      bg_cpbc_grid%nv = bg_cpbc_input%nx
+      bg_cpbc_grid%ns = bg_cpbc_input%nz
+      !
+      bg_cpbc_grid%vl = bg_cpbc_input%xl
+      bg_cpbc_grid%sl = bg_cpbc_input%zl
+      bg_cpbc_grid%vh = bg_cpbc_input%xh
+      bg_cpbc_grid%sh = bg_cpbc_input%zh
+      !
+    ! else if ( trim(adjustl(bg_cpbc_loc_str)) = 'Z' ) then
+      !
+      ! Assume Z is alwasy the spanwise direction. Do not allow Z plane to be
+      ! custom profile BC.
+      ! This boundary is located on the XZ plane.
+      ! bg_cpbc_npts = bg_cpbc_nx * bg_cpbc_ny
+      !
+    else
+      !
+      ! bg_cpbc_loc_str is undefined.
+      call stop_gfr(stop_mpi,pname,__LINE__,__FILE__, &
+        "Location plane of the custom profile BC (bg_cpbc_input%loc_str) " &
+        // "should be X or Y!")
+      !
+    end if
+    !
+    bg_cpbc_grid%dv = (bg_cpbc_grid%vh - bg_cpbc_grid%vl) &
+      / bg_cpbc_grid%nv
+    bg_cpbc_grid%ds = (bg_cpbc_grid%sh - bg_cpbc_grid%sl) &
+      / bg_cpbc_grid%ns
+    ! F2003 Auto Reallocation
+    bg_cpbc_grid%v = bg_cpbc_grid%vl &
+      + intseq(0,bg_cpbc_grid%nv) * bg_cpbc_grid%dv
+    bg_cpbc_grid%s = bg_cpbc_grid%sl &
+      + intseq(0,bg_cpbc_grid%ns) * bg_cpbc_grid%ds
+    !
+  end if
+  !
+  call debug_timer(leaving_procedure,pname)
+  !
+end subroutine create_bg_bc_grid
 !
 !###############################################################################
 !

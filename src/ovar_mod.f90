@@ -90,6 +90,27 @@ module ovar
   character(len=256), public :: in_prof_file = ""
   character, public :: in_prof_file_delimiter = ","
   !
+  ! background mesh parameters for custom profile bc
+  type :: bg_cpbc_input_t
+    !
+    ! nx,ny,nz are the number of cells
+    integer :: nx = 0
+    integer :: ny = 0
+    integer :: nz = 0
+    !
+    real(wp) :: xl = ten12
+    real(wp) :: xh = zero
+    real(wp) :: yl = ten12
+    real(wp) :: yh = zero
+    real(wp) :: zl = ten12
+    real(wp) :: zh = zero
+    !
+    character :: loc_str = ''
+    !
+  end type bg_cpbc_input_t
+  !
+  type(bg_cpbc_input_t), public, save :: bg_cpbc_input
+  !
   ! The number of input profile matrix is the same as the size of bc_input.
   real(wp), public, save, allocatable :: in_prof_mat(:,:)
   !
@@ -660,6 +681,7 @@ module input_namelist_mod
   use ovar,      only : lustre_stripe_count, lustre_stripe_size
   use ovar,      only : bc_input!,bc_input_t
   use ovar,      only : in_prof_file,in_prof_file_delimiter
+  use ovar,      only : bg_cpbc_input
   use ovar,      only : output_time_averaging, time_ave_file
   use ovar,      only : time_ave_vel_is_axisymm
   use ovar,      only : time_scaling_factor
@@ -794,6 +816,8 @@ module input_namelist_mod
   namelist / input / bc_input
   ! INPUT PROFILE
   namelist / input / in_prof_file,in_prof_file_delimiter
+  ! BACKGROUND MESH PARAMETERS FOR CUSTOM PROFILE BC
+  namelist / input / bg_cpbc_input
   ! POST FIELDS
   namelist / input / sol_fields
   !

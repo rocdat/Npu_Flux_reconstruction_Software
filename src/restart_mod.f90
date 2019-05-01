@@ -576,6 +576,8 @@ continue
   ! RECOMPUTED SO THAT IT IS LOCAL TO EACH PROCESSOR BECAUSE THIS IS NOT
   ! DONE WITHIN PARALLEL_MOD AFTER PARTITIONING THE GRID.
   !
+  ! TODO: Interpolate low order of solutions to high order of solution if
+  !       num_pts /= n_solpts.
   if (num_pts /= n_solpts) then
     write (iout,12) mypnum,num_pts,n_solpts
     solution_errors = 100
