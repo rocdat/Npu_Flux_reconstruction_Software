@@ -472,7 +472,7 @@ module geovar
   ! integer, public, save, allocatable :: global_wall_face_idx(:)
   !
   !
-  type :: bg_cpbc_grid_t
+  type :: tgbc_bg_grid_t
     !
     integer :: nv
     integer :: ns
@@ -488,9 +488,11 @@ module geovar
     real(wp), allocatable :: v(:)
     real(wp), allocatable :: s(:)
     !
-  end type bg_cpbc_grid_t
+    integer :: xyz_vi = 0
+    !
+  end type tgbc_bg_grid_t
   !
-  type(bg_cpbc_grid_t), public, save, allocatable :: bg_cpbc_grid
+  type(tgbc_bg_grid_t), public, save, allocatable :: tgbc_bg_grid
   !
 contains
 !

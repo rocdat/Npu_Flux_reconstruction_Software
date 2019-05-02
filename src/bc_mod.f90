@@ -249,9 +249,8 @@ continue
         !
         ! Set a custom profile at BC
         !
-        ! call get_bc_custom_profile(faceusp(nf)%v(:,:,1), &
-        !                            faceusp(nf)%v(:,:,2), &
-        !                            facexyz(nf)%v(:,:))
+        call get_bc_custom_profile(faceusp(nf)%v(:,:,2), nf)
+        !
       case (bc_cpu_bnd)
         !
         ! We dont need to do anything here for communication boundaries
@@ -2105,44 +2104,27 @@ end subroutine get_bc_mms_dirichlet_solution
 !
 !###############################################################################
 !
-subroutine get_bc_custom_profile(hufp,gufp,fxyz)
-  !===BEGIN===!
+subroutine get_bc_custom_profile(gufp,nf)
+  !
   ! Custom profile BC
   !   - At each flux point, interpolate based on an input profile.
   ! GUFP : Conservative variables at the ghost cell flux points
-  ! HUFP : Conservative variables at the host  cell flux points
   ! FXYZ : Coordinates of the flux points
-  !===END===!
+  ! NF   : Face index
   !.. Use Statements ..
+  use ovar, only : cpbc_gufp,cpbc_idx_map
   !
   !.. Formal Arguments ..
-  real(wp),    intent(in) :: hufp(:,:)
   real(wp), intent(inout) :: gufp(:,:)
-  real(wp),    intent(in) :: fxyz(:,:)
+  integer                 :: nf
   !.. Local Scalars ..
-  integer :: k,nfp
+  integer :: nfp
   !
 continue
   !
-  !===BEGIN===!
-  ! nfp = size(gufp,dim=2)
-  ! if (nme-nmb+1 == 2) then
-  !   do k = 1,nfp
-  !     !
-  !     gufp(:,k) = interp1d_linear()
-  !     !
-  !   end do
-  !   !
-  ! else
-  !   !
-  !   do k = 1,nfp
-  !     !
-  !     gufp(:,k) = interp1d_linear()
-  !     !
-  !   end do
-  !   !
-  ! end if
-  !===END===!
+  nfp = size(gufp,dim=2)
+  !
+  gufp(:,1:nfp) = cpbc_gufp(:,1:nfp,cpbc_idx_map(nf))
 
 end subroutine
 !

@@ -280,7 +280,7 @@ subroutine read_nml_input_file(input_fname)
   use ovar,   only : Period_Timesteps,Period_Time
   use ovar,   only : Grid_Length
   use ovar,   only : LDG_beta,LDG_tau
-  use ovar,   only : in_prof_file,in_prof_file_delimiter,in_prof_mat
+  use ovar,   only : cpbc_prof_input,cpbc_prof_mat
   use ovar,   only : sol_fields
   !
   use quadrature_mod, only : init_geom_quadrature_rules
@@ -305,10 +305,11 @@ subroutine read_nml_input_file(input_fname)
   real(wp) :: real_Total_Periods
   real(wp) :: aoa_radians
   real(wp) :: cfl_sum,cfl_time
-  integer  :: in_prof_mat_shape(2)
+  integer  :: cpbc_prof_mat_shape(2)
   !
   !.. Local Arrays ..
   character(len=80), dimension(12) :: input_text
+  real(wp), allocatable :: temp_cpbc_prof_mat(:,:)
   !
   !.. Local Parameters ..
   character(len=*), parameter :: pname = "read_nml_input_file"
@@ -753,18 +754,33 @@ continue
   end if
   !
   ! Read in the input data file
-  in_prof_file = adjustl(in_prof_file)
+  cpbc_prof_input%fname = adjustl(cpbc_prof_input%fname)
   !
-  if (len_trim(in_prof_file) > 0) then
+  if (len_trim(cpbc_prof_input%fname) > 0) then
     !
     ! Read the associated input profile in this BC
-    call read_in_matrix(in_prof_file, in_prof_mat, &
-                        in_prof_file_delimiter, in_prof_mat_shape)
+    call read_in_matrix(trim(cpbc_prof_input%fname), temp_cpbc_prof_mat, &
+                        cpbc_prof_input%fdelim, cpbc_prof_mat_shape)
     !
     ! Copy the input matrix to a shrinked-size matrix which is globally
     ! accessible.
-    ! NOTE: in_prof_mat set each record from the data file to its column.
-    call reallocate(in_prof_mat,in_prof_mat_shape(1),in_prof_mat_shape(2))
+    ! NOTE: cpbc_prof_mat set each record from the data file to its column.
+    call reallocate( temp_cpbc_prof_mat, &
+      cpbc_prof_mat_shape(1),cpbc_prof_mat_shape(2) )
+    !
+    allocate(cpbc_prof_mat(1:cpbc_prof_mat_shape(2),1:cpbc_prof_mat_shape(1)), &
+      stat=ierr,errmsg=error_message)
+    call alloc_error(pname,"cpbc_prof_mat",1,__LINE__,__FILE__,ierr, &
+      error_message)
+    !
+    ! Now, cpbc_prof_mat(1:npts,1:nvar). This transpose operation is for
+    ! the interpolation.
+    ! QUESTION: transpose cannot be used with F2003 Auto Reallocation ?
+    cpbc_prof_mat(:,:) = transpose(temp_cpbc_prof_mat)
+    !
+    deallocate(temp_cpbc_prof_mat,stat=ierr,errmsg=error_message)
+    call alloc_error(pname,"temp_cpbc_prof_mat",2,__LINE__,__FILE__,ierr, &
+      error_message)
     !
   end if
   !

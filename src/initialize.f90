@@ -84,9 +84,6 @@ continue
   !
   call create_bc_in
   !
-  ! Create the background mesh on the inflow BC
-  call create_bg_bc_grid
-  !
   ! Initialize all local pointers to disassociated
   !
   numer2init => null()
@@ -387,6 +384,13 @@ continue
   ! using the continuous output option or MMS
   !
   call get_face_and_edge_point_coordinates
+  !
+  ! Now facexyz is obtained. Interpolate the input profile to the custom
+  ! profile BC boundary.
+  call init_custome_profile_bc
+  !
+  ! Create the background mesh for the turbulence generation BC
+  call create_tgbc_bg_grid
   !
   call debug_timer(leaving_procedure,pname)
   !
@@ -2065,12 +2069,12 @@ end subroutine initialize_wall_faces
 !
 !###############################################################################
 !
-subroutine create_bg_bc_grid
+subroutine create_tgbc_bg_grid
   !
   ! Use Statements
-  use geovar, only : bg_cpbc_grid
+  use geovar, only : tgbc_bg_grid
   use geovar, only : nr
-  use ovar, only : bc_in,bg_cpbc_input
+  use ovar, only : bc_in,tgbc_bg_grid_input
   !
   ! Formal Arguments
   !
@@ -2084,8 +2088,171 @@ continue
   !
   call debug_timer(entering_procedure,pname)
   !
-  ! Loop BCs to check if the custom profile BC is specified. If so, create the
-  ! background mesh on the specified boundary.
+  ! Loop BCs to check if the turbulence generation BC is specified. If so,
+  ! create the background mesh on the specified boundary.
+  ! bc_in(0) is the reference condition. So we need to reduce the size by 1
+  nbc = size(bc_in) - 1
+  bc_loop : do ibc = 1,nbc
+    !
+    if ( bc_in(ibc)%bc_type == bc_turbulence_generation ) then
+      exit bc_loop
+    end if
+    !
+  end do bc_loop
+  !
+  if ( ibc == nbc+1 ) then
+    !
+    ! Turbulence generation BC is not found. Do not need the background mesh on the
+    ! boundary.
+    return
+    !
+  end if
+  !
+  ! The turbulence generation BC is found. Generate the background mesh on the
+  ! boundary.
+  allocate(tgbc_bg_grid,stat=ierr,errmsg=error_message)
+  call alloc_error(pname,"tgbc_bg_grid",1,__LINE__,__FILE__,ierr,error_message)
+  !
+  ! Calculate other parameters based on the input parameters
+  if (nr == 2) then
+    !
+    ! 2D simulation. So the boundary is 1D.
+    if ( trim(adjustl(tgbc_bg_grid_input%loc_str)) == 'X' ) then
+      !
+      ! This boundary is located on the X plane. It means X = const.
+      !
+      tgbc_bg_grid%nv = tgbc_bg_grid_input%ny
+      !
+      tgbc_bg_grid%vl = tgbc_bg_grid_input%yl
+      tgbc_bg_grid%vh = tgbc_bg_grid_input%yh
+      !
+      tgbc_bg_grid%xyz_vi = 2
+      !
+    else if ( trim(adjustl(tgbc_bg_grid_input%loc_str)) == 'Y' ) then
+      !
+      ! This boundary is located on the Y plane. It means Y = const.
+      !
+      tgbc_bg_grid%nv = tgbc_bg_grid_input%nx
+      !
+      tgbc_bg_grid%vl = tgbc_bg_grid_input%xl
+      tgbc_bg_grid%vh = tgbc_bg_grid_input%xh
+      !
+      tgbc_bg_grid%xyz_vi = 1
+      !
+    else
+      !
+      ! loc_str is undefined.
+      call stop_gfr(stop_mpi,pname,__LINE__,__FILE__, &
+        "Location plane of the custom profile BC (tgbc_bg_grid_input%loc_str) " &
+        // "should be X or Y!")
+      !
+    end if
+    !
+    tgbc_bg_grid%dv = (tgbc_bg_grid%vh - tgbc_bg_grid%vl) &
+      / tgbc_bg_grid%nv
+    ! F2003 Auto Reallocation
+    tgbc_bg_grid%v = tgbc_bg_grid%vl &
+      + intseq(0,tgbc_bg_grid%nv) * tgbc_bg_grid%dv
+    !
+  else if (nr == 3) then
+    !
+    ! 3D simulation. So the boundary is 2D.
+    if ( trim(adjustl(tgbc_bg_grid_input%loc_str)) == 'X' ) then
+      !
+      ! This boundary is located on the XY plane.
+      !
+      tgbc_bg_grid%nv = tgbc_bg_grid_input%ny
+      tgbc_bg_grid%ns = tgbc_bg_grid_input%nz
+      !
+      tgbc_bg_grid%vl = tgbc_bg_grid_input%yl
+      tgbc_bg_grid%sl = tgbc_bg_grid_input%zl
+      tgbc_bg_grid%vh = tgbc_bg_grid_input%yh
+      tgbc_bg_grid%sh = tgbc_bg_grid_input%zh
+      !
+      tgbc_bg_grid%xyz_vi = 2
+      !
+    else if ( trim(adjustl(tgbc_bg_grid_input%loc_str)) == 'Y' ) then
+      !
+      ! This boundary is located on the XZ plane.
+      !
+      tgbc_bg_grid%nv = tgbc_bg_grid_input%nx
+      tgbc_bg_grid%ns = tgbc_bg_grid_input%nz
+      !
+      tgbc_bg_grid%vl = tgbc_bg_grid_input%xl
+      tgbc_bg_grid%sl = tgbc_bg_grid_input%zl
+      tgbc_bg_grid%vh = tgbc_bg_grid_input%xh
+      tgbc_bg_grid%sh = tgbc_bg_grid_input%zh
+      !
+      tgbc_bg_grid%xyz_vi = 1
+      !
+    ! else if ( trim(adjustl(loc_str)) = 'Z' ) then
+      !
+      ! Assume Z is alwasy the spanwise direction. Do not allow Z plane to be
+      ! custom profile BC.
+      ! This boundary is located on the XZ plane.
+      ! bg_cpbc_npts = bg_cpbc_nx * bg_cpbc_ny
+      !
+    else
+      !
+      ! loc_str is undefined.
+      call stop_gfr(stop_mpi,pname,__LINE__,__FILE__, &
+        "Location plane of the custom profile BC (tgbc_bg_grid_input%loc_str) " &
+        // "should be X or Y!")
+      !
+    end if
+    !
+    tgbc_bg_grid%dv = (tgbc_bg_grid%vh - tgbc_bg_grid%vl) &
+      / tgbc_bg_grid%nv
+    tgbc_bg_grid%ds = (tgbc_bg_grid%sh - tgbc_bg_grid%sl) &
+      / tgbc_bg_grid%ns
+    ! F2003 Auto Reallocation
+    tgbc_bg_grid%v = tgbc_bg_grid%vl &
+      + intseq(0,tgbc_bg_grid%nv) * tgbc_bg_grid%dv
+    tgbc_bg_grid%s = tgbc_bg_grid%sl &
+      + intseq(0,tgbc_bg_grid%ns) * tgbc_bg_grid%ds
+    !
+  end if
+  !
+  call debug_timer(leaving_procedure,pname)
+  !
+end subroutine create_tgbc_bg_grid
+!
+!###############################################################################
+!
+subroutine init_custome_profile_bc
+  !
+  ! Use Statements
+  use geovar, only : nr,nfbnd
+  use geovar, only : bface,face
+  use eqn_idx, only : nq
+  use ovar, only : bc_in,cpbc_prof_mat,cpbc_prof_input
+  use ovar, only : cpbc_gufp,cpbc_idx_map
+  use order_mod, only : geom_solpts,maxFP
+  use flowvar, only : facexyz
+  use math_interpolation, only : interp_data_t
+  !
+  ! Formal Arguments
+  !
+  ! Local Varaibles
+  integer :: ierr
+  integer :: nbc,ibc,i,l,nf,kf,nfp,nfp_max
+  integer :: face_geom,face_order
+  integer :: cpbc_idx
+  real(wp) :: y_fp
+  !
+  ! Local Array
+  type(interp_data_t), allocatable :: cpbc_interp1d(:)
+  real(wp), dimension(1:nq) :: pv
+  !
+  ! Local Parameter
+  character(len=*), parameter :: pname = "init_custome_profile_bc"
+  !
+continue
+  !
+  call debug_timer(entering_procedure,pname)
+  !
+  ! Loop BCs to check if the turbulence generation BC is specified. If so,
+  ! create the background mesh on the specified boundary.
   ! bc_in(0) is the reference condition. So we need to reduce the size by 1
   nbc = size(bc_in) - 1
   bc_loop : do ibc = 1,nbc
@@ -2098,112 +2265,117 @@ continue
   !
   if ( ibc == nbc+1 ) then
     !
-    ! Custom profile BC is not found. Do not need the background mesh on the
+    ! Turbulence generation BC is not found. Do not need the background mesh on the
     ! boundary.
     return
     !
   end if
   !
-  ! The custom profile BC is found. Generate the background mesh on the
-  ! boundary.
-  allocate(bg_cpbc_grid,stat=ierr,errmsg=error_message)
-  call alloc_error(pname,"bg_cpbc_grid",1,__LINE__,__FILE__,ierr,error_message)
-  !
-  ! Calculate other parameters based on the input parameters
-  if (nr == 2) then
+  if ( .not. allocated(cpbc_prof_mat) ) then
     !
-    ! 2D simulation. So the boundary is 1D.
-    if ( trim(adjustl(bg_cpbc_input%loc_str)) == 'X' ) then
-      !
-      ! This boundary is located on the X plane. It means X = const.
-      !
-      bg_cpbc_grid%nv = bg_cpbc_input%ny
-      !
-      bg_cpbc_grid%vl = bg_cpbc_input%yl
-      bg_cpbc_grid%vh = bg_cpbc_input%yh
-      !
-    else if ( trim(adjustl(bg_cpbc_input%loc_str)) == 'Y' ) then
-      !
-      ! This boundary is located on the Y plane. It means Y = const.
-      !
-      bg_cpbc_grid%nv = bg_cpbc_input%nx
-      !
-      bg_cpbc_grid%vl = bg_cpbc_input%xl
-      bg_cpbc_grid%vh = bg_cpbc_input%xh
-      !
-    else
-      !
-      ! bg_cpbc_loc_str is undefined.
-      call stop_gfr(stop_mpi,pname,__LINE__,__FILE__, &
-        "Location plane of the custom profile BC (bg_cpbc_input%loc_str) " &
-        // "should be X or Y!")
-      !
-    end if
-    !
-    bg_cpbc_grid%dv = (bg_cpbc_grid%vh - bg_cpbc_grid%vl) &
-      / bg_cpbc_grid%nv
-    ! F2003 Auto Reallocation
-    bg_cpbc_grid%v = bg_cpbc_grid%vl &
-      + intseq(0,bg_cpbc_grid%nv) * bg_cpbc_grid%dv
-    !
-  else if (nr == 3) then
-    !
-    ! 3D simulation. So the boundary is 2D.
-    if ( trim(adjustl(bg_cpbc_input%loc_str)) == 'X' ) then
-      !
-      ! This boundary is located on the XY plane.
-      !
-      bg_cpbc_grid%nv = bg_cpbc_input%ny
-      bg_cpbc_grid%ns = bg_cpbc_input%nz
-      !
-      bg_cpbc_grid%vl = bg_cpbc_input%yl
-      bg_cpbc_grid%sl = bg_cpbc_input%zl
-      bg_cpbc_grid%vh = bg_cpbc_input%yh
-      bg_cpbc_grid%sh = bg_cpbc_input%zh
-      !
-    else if ( trim(adjustl(bg_cpbc_input%loc_str)) == 'Y' ) then
-      !
-      ! This boundary is located on the XZ plane.
-      !
-      bg_cpbc_grid%nv = bg_cpbc_input%nx
-      bg_cpbc_grid%ns = bg_cpbc_input%nz
-      !
-      bg_cpbc_grid%vl = bg_cpbc_input%xl
-      bg_cpbc_grid%sl = bg_cpbc_input%zl
-      bg_cpbc_grid%vh = bg_cpbc_input%xh
-      bg_cpbc_grid%sh = bg_cpbc_input%zh
-      !
-    ! else if ( trim(adjustl(bg_cpbc_loc_str)) = 'Z' ) then
-      !
-      ! Assume Z is alwasy the spanwise direction. Do not allow Z plane to be
-      ! custom profile BC.
-      ! This boundary is located on the XZ plane.
-      ! bg_cpbc_npts = bg_cpbc_nx * bg_cpbc_ny
-      !
-    else
-      !
-      ! bg_cpbc_loc_str is undefined.
-      call stop_gfr(stop_mpi,pname,__LINE__,__FILE__, &
-        "Location plane of the custom profile BC (bg_cpbc_input%loc_str) " &
-        // "should be X or Y!")
-      !
-    end if
-    !
-    bg_cpbc_grid%dv = (bg_cpbc_grid%vh - bg_cpbc_grid%vl) &
-      / bg_cpbc_grid%nv
-    bg_cpbc_grid%ds = (bg_cpbc_grid%sh - bg_cpbc_grid%sl) &
-      / bg_cpbc_grid%ns
-    ! F2003 Auto Reallocation
-    bg_cpbc_grid%v = bg_cpbc_grid%vl &
-      + intseq(0,bg_cpbc_grid%nv) * bg_cpbc_grid%dv
-    bg_cpbc_grid%s = bg_cpbc_grid%sl &
-      + intseq(0,bg_cpbc_grid%ns) * bg_cpbc_grid%ds
+    ! Custom profile BC is specified in the input file. However, the input
+    ! profile is not provided.
+    call stop_gfr(stop_mpi,pname,__LINE__,__FILE__, &
+      "cpbc_prof_mat is not provided when bc_custom_profile is specified.")
     !
   end if
   !
+  ! Allocate the interpolator array
+  ! cpbc_prof_mat has its first column as the coordinates
+  ! So nvar is reduced by 1
+  if ( size(cpbc_prof_mat,dim=2)-1 /= nq ) then
+    !
+    call stop_gfr(stop_mpi,pname,__LINE__,__FILE__, &
+      "cpbc_prof_mat has wrong number of variables in 2D simulations.")
+    !
+  end if
+  !
+  allocate(cpbc_interp1d(1:nq),stat=ierr,errmsg=error_message)
+  call alloc_error(pname,"cpbc_interp1d",1,__LINE__,__FILE__,ierr, &
+    error_message)
+  !
+  ! Init the interpolator
+  do i = 1,nq
+    call cpbc_interp1d(i)%init(cpbc_prof_mat(:,1),cpbc_prof_mat(:,i+1))
+  end do
+  !
+  ! Determine the direciton index of facexyz
+  if ( cpbc_prof_input%dat_dir == 'X' ) then
+    !
+    l = 1
+    !
+  else if ( cpbc_prof_input%dat_dir == 'Y' ) then
+    !
+    l = 2
+    !
+  else
+    !
+    call stop_gfr(stop_mpi,pname,__LINE__,__FILE__, &
+      "cpbc_prof_input%dat_dir must be X or Y.")
+    !
+  end if
+  !
+  ! Allocate cpbc_gufp
+  allocate(cpbc_gufp(1:nq,1:maxFP,1:nfbnd),source=zero,stat=ierr, &
+    errmsg=error_message)
+  call alloc_error(pname,"cpbc_gufp",1,__LINE__,__FILE__,ierr, &
+    error_message)
+  ! Allocate cpbc_idx_map
+  allocate(cpbc_idx_map(1:nfbnd),source=0,stat=ierr, &
+    errmsg=error_message)
+  call alloc_error(pname,"cpbc_idx_map",1,__LINE__,__FILE__,ierr, &
+    error_message)
+  !
+  ! Interpolate the input profile to the flux point defined by facexyz
+  cpbc_idx = 0
+  nfp_max = 0
+  bface_loop : do nf = 1,nfbnd
+    !
+    ! First check if this boundary face has the custom profile BC
+    if ( bface(1,nf) /= bc_custom_profile )  then
+      !
+      ! This face is not custom profile BC
+      cycle bface_loop
+      !
+    end if
+    !
+    ! 
+    cpbc_idx = cpbc_idx + 1
+    cpbc_idx_map(nf) = cpbc_idx
+    !
+    ! Now this face is custom profile BC
+    face_geom = face(nf)%geom
+    face_order = face(nf)%order
+    !
+    ! Update nfp_max
+    ! nfp_max is used in the allocation of cpbc_gufp. In this way, we could
+    ! mix tri and quad in the custom profile BC.
+    nfp = geom_solpts(face_geom,face_order)
+    nfp_max = merge( nfp, nfp_max, nfp>nfp_max )
+    !
+    do kf = 1,nfp
+      !
+      y_fp = facexyz(nf)%v(l,kf)
+      
+      do i = 1,nq
+        pv(i) = cpbc_interp1d(i)%eval(y_fp)
+      end do
+      !
+      cpbc_gufp(1:nq,kf,cpbc_idx_map(nf)) = vsp2u_sp( pv(1:nq) )
+      !
+    end do
+    !
+  end do bface_loop
+  !
+  ! Reallocate cpbc_gufp
+  call reallocate(cpbc_gufp,nq,nfp_max,cpbc_idx)
+  !
+  deallocate(cpbc_interp1d,stat=ierr,errmsg=error_message)
+  call alloc_error(pname,"cpbc_interp1d",2,__LINE__,__FILE__,ierr, &
+    error_message)
   call debug_timer(leaving_procedure,pname)
   !
-end subroutine create_bg_bc_grid
+end subroutine init_custome_profile_bc
 !
 !###############################################################################
 !

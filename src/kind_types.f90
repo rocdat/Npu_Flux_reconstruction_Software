@@ -419,6 +419,7 @@ module module_kind_types
   integer, parameter :: bc_freestream = 23
   integer, parameter :: bc_fixed = 24
   integer, parameter :: bc_custom_profile = 25
+  integer, parameter :: bc_turbulence_generation = 26
   ! Wall BCs
   integer, parameter :: bc_slip_wall = 50
   integer, parameter :: bc_euler_wall = 51
@@ -810,12 +811,15 @@ module module_kind_types
   private :: reallocate1_r4,reallocate1_r8
   private :: reallocate1_c
   private :: reallocate2_i4,reallocate2_i8
+  private :: reallocate2_r4,reallocate2_r8
+  private :: reallocate3_r4,reallocate3_r8
   !
   interface reallocate
     module procedure reallocate1_i4, reallocate1_i8, &
                      reallocate1_r4, reallocate1_r8, &
                      reallocate2_i4, reallocate2_i8, &
                      reallocate2_r4, reallocate2_r8, &
+                     reallocate3_r4, reallocate3_r8, &
                      reallocate1_c
   end interface reallocate
   !

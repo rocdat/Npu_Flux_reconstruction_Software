@@ -10,5 +10,6 @@ NFS is NPU Flux reconstruction Software. Based on GFR, NFS is developed to handl
 - Custom profile BC
 - Custom profile initialization
 - Turbulence generation BC via the digital filter
+- Periodic BC
 - Time averaged vorticity
 

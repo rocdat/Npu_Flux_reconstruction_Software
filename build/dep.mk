@@ -89,6 +89,9 @@ $(OBJDIR)/cgns_mod.o : cgns_mod.f90 \
 $(OBJDIR)/cgnstypes_mod.o : cgnstypes_mod.f90 \
                   $(OBJDIR)/kind_types.o
 
+$(OBJDIR)/math_interpolation.o : math_interpolation.f90 \
+                  $(OBJDIR)/kind_types.o
+
 $(OBJDIR)/channel_mod.o : channel_mod.f90 \
                 $(OBJDIR)/kind_types.o \
                 $(OBJDIR)/eqn_idx_mod.o \
@@ -226,7 +229,8 @@ $(OBJDIR)/initialize.o : initialize.f90 \
                $(FUNDIR)/smc000_interior_wall_radius.f90 \
                $(FUNDIR)/arn2_interior_wall_radius.f90 \
                $(FUNDIR)/usp2v.f90 \
-               $(FUNDIR)/viscosity.f90
+               $(FUNDIR)/viscosity.f90 \
+               $(OBJDIR)/math_interpolation.o
               #$(OBJDIR)/time_mod.o \
 
 $(OBJDIR)/interpolation_mod.o : interpolation_mod.f90 \

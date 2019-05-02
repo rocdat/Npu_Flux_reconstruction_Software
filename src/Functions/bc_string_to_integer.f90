@@ -103,8 +103,11 @@ continue
       return_value = bc_freestream
     case ("FIXED")
       return_value = bc_fixed
+      !
     case ("CUSTOMPROFILE")
       return_value = bc_custom_profile
+    case ("TURBULENCEGENERATION","INFLOWTURBULENCE")
+      return_value = bc_turbulence_generation
       !
     case ("WALL","WALLVISCOUS")
       return_value = bc_default_wall

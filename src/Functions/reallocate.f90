@@ -336,3 +336,128 @@ end subroutine reallocate2_r8
 !
 !###############################################################################
 !
+subroutine reallocate3_r4(array,new_size1,new_size2,new_size3)
+  !
+  !.. Formal Arguments ..
+  integer,  optional,                         intent(in) :: new_size1
+  integer,  optional,                         intent(in) :: new_size2
+  integer,  optional,                         intent(in) :: new_size3
+  real(r4), allocatable, dimension(:,:,:), intent(inout) :: array
+  !
+  !.. Local Scalars ..
+  integer :: temp_size1,temp_size2,temp_size3,num_copy1,num_copy2,num_copy3,ierr
+  !
+  !.. Local Allocatable Arrays ..
+  real(r4), allocatable, dimension(:,:,:) :: temp_array
+  !
+  !.. Local Parameters ..
+  character(len=*), parameter :: pname = "reallocate3_r4"
+  !
+continue
+  !
+  ! Get the old dimensions of array
+  !
+  temp_size1 = 1
+  temp_size2 = 1
+  temp_size3 = 1
+  if (allocated(array)) then
+    temp_size1 = size(array,1)
+    temp_size2 = size(array,2)
+    temp_size3 = size(array,3)
+  end if
+  !
+  if (present(new_size1)) temp_size1 = new_size1
+  if (present(new_size2)) temp_size2 = new_size2
+  if (present(new_size3)) temp_size3 = new_size3
+  !
+  ! Allocate the temporary array to store the old contents of array
+  !
+  allocate(temp_array(1:temp_size1,1:temp_size2,1:temp_size3),source=0.0_r4, &
+           stat=ierr,errmsg=error_message)
+  call alloc_error(pname,"temp_array",1,__LINE__,__FILE__,ierr, &
+                   error_message,skip_alloc_pause)
+  !
+  ! Copy the old contents of array into the temporary array
+  !
+  if (allocated(array)) then
+    num_copy1 = min( size(temp_array,dim=1) , size(array,dim=1) )
+    num_copy2 = min( size(temp_array,dim=2) , size(array,dim=2) )
+    num_copy3 = min( size(temp_array,dim=3) , size(array,dim=3) )
+    temp_array(1:num_copy1,1:num_copy2,1:num_copy3) = &
+      array(1:num_copy1,1:num_copy2,1:num_copy3)
+  end if
+  !
+  ! move_alloc does:
+  !     1. deallocates array
+  !     2. allocates array with the same type, type parameters,
+  !        array bounds, and value as temp_array
+  !     3. deallocates temp_array
+  !
+  call move_alloc( from=temp_array , to=array )
+  !
+end subroutine reallocate3_r4
+!
+!###############################################################################
+!
+subroutine reallocate3_r8(array,new_size1,new_size2,new_size3)
+  !
+  !.. Formal Arguments ..
+  integer,  optional,                         intent(in) :: new_size1
+  integer,  optional,                         intent(in) :: new_size2
+  integer,  optional,                         intent(in) :: new_size3
+  real(r8), allocatable, dimension(:,:,:), intent(inout) :: array
+  !
+  !.. Local Scalars ..
+  integer :: temp_size1,temp_size2,temp_size3,num_copy1,num_copy2,num_copy3,ierr
+  !
+  !.. Local Allocatable Arrays ..
+  real(r8), allocatable, dimension(:,:,:) :: temp_array
+  !
+  !.. Local Parameters ..
+  character(len=*), parameter :: pname = "reallocate3_r4"
+  !
+continue
+  !
+  ! Get the old dimensions of array
+  !
+  temp_size1 = 1
+  temp_size2 = 1
+  temp_size3 = 1
+  if (allocated(array)) then
+    temp_size1 = size(array,1)
+    temp_size2 = size(array,2)
+    temp_size3 = size(array,3)
+  end if
+  !
+  if (present(new_size1)) temp_size1 = new_size1
+  if (present(new_size2)) temp_size2 = new_size2
+  if (present(new_size3)) temp_size3 = new_size3
+  !
+  ! Allocate the temporary array to store the old contents of array
+  !
+  allocate(temp_array(1:temp_size1,1:temp_size2,1:temp_size3),source=0.0_r8, &
+           stat=ierr,errmsg=error_message)
+  call alloc_error(pname,"temp_array",1,__LINE__,__FILE__,ierr, &
+                   error_message,skip_alloc_pause)
+  !
+  ! Copy the old contents of array into the temporary array
+  !
+  if (allocated(array)) then
+    num_copy1 = min( size(temp_array,dim=1) , size(array,dim=1) )
+    num_copy2 = min( size(temp_array,dim=2) , size(array,dim=2) )
+    num_copy3 = min( size(temp_array,dim=3) , size(array,dim=3) )
+    temp_array(1:num_copy1,1:num_copy2,1:num_copy3) = &
+      array(1:num_copy1,1:num_copy2,1:num_copy3)
+  end if
+  !
+  ! move_alloc does:
+  !     1. deallocates array
+  !     2. allocates array with the same type, type parameters,
+  !        array bounds, and value as temp_array
+  !     3. deallocates temp_array
+  !
+  call move_alloc( from=temp_array , to=array )
+  !
+end subroutine reallocate3_r8
+
+

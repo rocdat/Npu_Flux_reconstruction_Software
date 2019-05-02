@@ -33,6 +33,8 @@ continue
       return_value = "fixed"
     case (bc_custom_profile)
       return_value = "custom_profile"
+    case (bc_turbulence_generation)
+      return_value = "turbulence_generation"
     case (bc_slip_wall)
       return_value = "slip_wall"
     case (bc_euler_wall)

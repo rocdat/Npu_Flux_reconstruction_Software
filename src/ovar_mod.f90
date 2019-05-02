@@ -78,20 +78,28 @@ module ovar
   ! Set up by the input conf file by NML.
   type(bc_input_t), public, save :: bc_input(1:bc_input_size)
   !
-  !===BEGIN===!
-  ! ! Matrix stores the matrix of the input profile
-  ! type, public :: in_prof_mat_t
-  !   !
-  !   real(wp), allocatable :: mat(:,:)
-  !   !
-  ! end type in_prof_mat_t
-  !===END===!
+  ! Matrix stores the matrix of the input profile
+  type, public :: cpbc_prof_input_t
+    !
+    character(len=256) :: fname = ""
+    character :: fdelim = ","
+    character :: dat_dir = ''
+    !
+  end type cpbc_prof_input_t
   !
-  character(len=256), public :: in_prof_file = ""
-  character, public :: in_prof_file_delimiter = ","
+  type(cpbc_prof_input_t), public, save :: cpbc_prof_input
+  !
+  ! The number of input profile matrix is the same as the size of bc_input.
+  real(wp), public, save, allocatable :: cpbc_prof_mat(:,:)
+  !
+  ! Ghost cell Conservative variables at flux points for custome profile BC
+  real(wp), public, save, allocatable :: cpbc_gufp(:,:,:)
+  !
+  ! Map nf \in [1,nfbnd] to cpbc_nf
+  integer, public, save, allocatable :: cpbc_idx_map(:)
   !
   ! background mesh parameters for custom profile bc
-  type :: bg_cpbc_input_t
+  type :: tgbc_bg_grid_input_t
     !
     ! nx,ny,nz are the number of cells
     integer :: nx = 0
@@ -107,12 +115,9 @@ module ovar
     !
     character :: loc_str = ''
     !
-  end type bg_cpbc_input_t
+  end type tgbc_bg_grid_input_t
   !
-  type(bg_cpbc_input_t), public, save :: bg_cpbc_input
-  !
-  ! The number of input profile matrix is the same as the size of bc_input.
-  real(wp), public, save, allocatable :: in_prof_mat(:,:)
+  type(tgbc_bg_grid_input_t), public, save :: tgbc_bg_grid_input
   !
   type, public :: bc_in_t
     real(wp), allocatable :: cv(:)
@@ -680,8 +685,8 @@ module input_namelist_mod
   use ovar,      only : convert_restart_to_cgns, completely_disable_cgns
   use ovar,      only : lustre_stripe_count, lustre_stripe_size
   use ovar,      only : bc_input!,bc_input_t
-  use ovar,      only : in_prof_file,in_prof_file_delimiter
-  use ovar,      only : bg_cpbc_input
+  use ovar,      only : cpbc_prof_input
+  use ovar,      only : tgbc_bg_grid_input
   use ovar,      only : output_time_averaging, time_ave_file
   use ovar,      only : time_ave_vel_is_axisymm
   use ovar,      only : time_scaling_factor
@@ -814,10 +819,10 @@ module input_namelist_mod
   namelist / input / output_bface_array
   ! INPUT BOUNDARY CONDITIONS
   namelist / input / bc_input
-  ! INPUT PROFILE
-  namelist / input / in_prof_file,in_prof_file_delimiter
+  ! CUSTOM PROFILE INPUT PROFILE
+  namelist / input / cpbc_prof_input
   ! BACKGROUND MESH PARAMETERS FOR CUSTOM PROFILE BC
-  namelist / input / bg_cpbc_input
+  namelist / input / tgbc_bg_grid_input
   ! POST FIELDS
   namelist / input / sol_fields
   !
