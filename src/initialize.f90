@@ -209,8 +209,16 @@ continue
           !
         else if ( nr == 3 ) then
           !
-          call stop_gfr(stop_mpi,pname,__LINE__,__FILE__,&
-            "3D not ready!")
+          if ( any(grid%elem(n)%prop%geom == Geom_3D) ) then
+            !
+            init_cond = 0
+            !
+          else if ( any(grid%elem(n)%prop%geom == Geom_2D) ) then
+            !
+            init_cond = grid%elem(n)%tags(1)
+            !
+          end if
+          !
         end if
         !
       end if
