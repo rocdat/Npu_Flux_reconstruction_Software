@@ -9291,7 +9291,7 @@ subroutine read_in_matrix(in_fpath,mat,delim_char,mat_shape)
   integer  :: i_delim,n_delim,n_char_in_text,col_count
   integer  :: i_row
   logical(ldk) :: file_exists
-  character(len=80) :: text ! Requires max col be 80 in the in file.
+  character(len=1024) :: text ! Requires max col be 80 in the in file.
   character :: leading_char
   !
   !.. Local Parameters ..

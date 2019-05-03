@@ -266,10 +266,15 @@ continue
       allocate ( facexyz(1:nface) , stat=ierr , errmsg=error_message )
       call alloc_error(pname,"facexyz",1,__LINE__,__FILE__,ierr,error_message)
       !
-    else if (mms_opt /= 0) then
-      !
-      ! If using MMS but not using continuous output, facexyz only needs
-      ! to be defined for the boundary faces
+    ! If using MMS but not using continuous output, facexyz only needs
+    ! to be defined for the boundary faces
+    ! else if (mms_opt /= 0) then
+    !
+    ! Now let facexyz be created even for mms_opt == 0. Because facexyz is
+    ! used in init_custome_profile_bc subroutine.
+    ! NOTE: facexyz here includes only bnd faces. Another data structure xyz_fp
+    !       contains all faces including the interior faces.
+    else
       !
       allocate ( facexyz(1:nfbnd) , stat=ierr , errmsg=error_message )
       call alloc_error(pname,"facexyz",1,__LINE__,__FILE__,ierr,error_message)

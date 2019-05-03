@@ -79,10 +79,10 @@ module geovar
   ! xyz_face_nodes : x,y,z coordinates of the nodes in the face
   real(wp), public, save, allocatable, dimension(:,:,:) :: xyz_face_nodes
   !
-  ! xyz_fc : x,y coordinates of the face center
+  ! xyz_fc : x,y,z coordinates of the face center
   real(wp), public, save, allocatable, dimension(:,:) :: xyz_fc
   !
-  !
+  ! xyz_fp : x,y,z coordinates of the flux points
   real(wp), public, save, allocatable, dimension(:,:) :: xyz_fp
   !
   ! Grid size parameters for global grid
