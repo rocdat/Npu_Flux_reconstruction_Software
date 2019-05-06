@@ -468,28 +468,28 @@ module module_kind_types
                                                bc_generic_freeflow ]
   integer, parameter :: bc_mms(1:1) = [bc_mms_dirichlet]
   !
-  ! Parameters defining workshop test cases
+  ! Parameters defining Initialization
   !
-  integer, parameter :: Generic_MeanFlow        = 1
-  integer, parameter :: Channel_Flow            = 2
-  integer, parameter :: Inviscid_Gaussian_Bump  = 3
-  integer, parameter :: Laminar_BndLyr          = 4
-  integer, parameter :: Shu_Vortex              = 5
-  integer, parameter :: Vortex_Transport        = 6
-  integer, parameter :: Density_Transport       = 7
-  integer, parameter :: Entropy_Transport       = 8
-  integer, parameter :: Taylor_Green_Vortex     = 9
-  integer, parameter :: Nozzle_Jet              = 10
-  integer, parameter :: Double_Mach_Reflection  = 11
-  integer, parameter :: Infinite_Cylinder       = 12
-  integer, parameter :: Freestream_Preservation = 13
-  integer, parameter :: Advec_Problems(1:2) = [ Density_Transport, &
-                                                Entropy_Transport ]
-  integer, parameter :: Vortex_Problems(1:2) = [ Shu_Vortex, &
-                                                 Vortex_Transport ]
-  integer, parameter :: Transport_Problems(1:4) = [ Shu_Vortex, &
-                                                    Vortex_Transport, &
-                                                    Advec_Problems ]
+  integer, parameter :: Const_Flow = 1
+  integer, parameter :: Shu_Vortex = 2
+  integer, parameter :: Channel_Flow = 3
+  ! integer, parameter :: Inviscid_Gaussian_Bump  = 3
+  ! integer, parameter :: Laminar_BndLyr          = 4
+  ! integer, parameter :: Vortex_Transport        = 6
+  ! integer, parameter :: Density_Transport       = 7
+  ! integer, parameter :: Entropy_Transport       = 8
+  ! integer, parameter :: Taylor_Green_Vortex     = 9
+  ! integer, parameter :: Nozzle_Jet              = 10
+  ! integer, parameter :: Double_Mach_Reflection  = 11
+  ! integer, parameter :: Infinite_Cylinder       = 12
+  ! integer, parameter :: Freestream_Preservation = 13
+  ! integer, parameter :: Advec_Problems(1:2) = [ Density_Transport, &
+  !                                               Entropy_Transport ]
+  ! integer, parameter :: Vortex_Problems(1:2) = [ Shu_Vortex, &
+  !                                                Vortex_Transport ]
+  ! integer, parameter :: Transport_Problems(1:4) = [ Shu_Vortex, &
+  !                                                   Vortex_Transport, &
+  !                                                   Advec_Problems ]
   !
   ! Location of 1D solution points
   integer, parameter :: Equi_Distant_Points     = 0
@@ -579,10 +579,10 @@ module module_kind_types
   integer, parameter :: k_omega_2006 = -k_omega
   !
   ! Grid Types
-  integer, parameter :: Internally_Generated_Grid = -1
-  integer, parameter :: Gambit_Neutral = 1
-  integer, parameter :: Gmsh_Format = 2
-  integer, parameter :: Plot3D_Format = 3
+  ! integer, parameter :: Internally_Generated_Grid = -1
+  ! integer, parameter :: Gambit_Neutral = 1
+  integer, parameter :: Gmsh_Format = 1
+  ! integer, parameter :: Plot3D_Format = 3
   integer, parameter :: CGNS_Format = 4
   !
   ! CGNS constants

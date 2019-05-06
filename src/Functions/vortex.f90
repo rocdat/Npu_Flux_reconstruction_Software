@@ -39,14 +39,19 @@ continue
   ! For density/entropy transport or Shu vortex -> bigR = 1;   bigGam = 5
   ! For vortex          transport               -> bigR = 1.5; bigGam = 13.5
   !
-  bigR   = merge(vortex_bigR,  one, any(itestcase==Vortex_Problems))
-  bigGam = merge(vortex_bigGam,five,any(itestcase==Vortex_Problems))
+  ! bigR   = merge(vortex_bigR,  one, any(itestcase==Vortex_Problems))
+  ! bigGam = merge(vortex_bigGam,five,any(itestcase==Vortex_Problems))
+  bigR   = merge(vortex_bigR,  one, itestcase==Shu_Vortex)
+  bigGam = merge(vortex_bigGam,five,itestcase==Shu_Vortex)
   !
   c2 = half*machref*machref*gm1
   !
   ! If doing density transport, make c3 = 0 to zero out pressure part of energy
   !
-  c3 = one - deltafun(itestcase==Density_Transport)
+  ! Drop support for Density_Transport
+  ! 2019-05-06, 20:02:08 Jingchang Shi
+  ! c3 = one - deltafun(itestcase==Density_Transport)
+  c3 = one
   !
   func = (one - x*x - y*y)/(two*bigR*bigR)
   !
@@ -62,8 +67,10 @@ continue
   ! Only add on the velocity pertubations if doing vortex transport
   ! i.e., the velocity is constant if doing density/entropy transport
   !
-  vel(1) = velref(1) + du*deltafun(any(itestcase==Vortex_Problems))
-  vel(2) = velref(2) + dv*deltafun(any(itestcase==Vortex_Problems))
+  ! vel(1) = velref(1) + du*deltafun(any(itestcase==Vortex_Problems))
+  ! vel(2) = velref(2) + dv*deltafun(any(itestcase==Vortex_Problems))
+  vel(1) = velref(1) + du*deltafun(itestcase==Shu_Vortex)
+  vel(2) = velref(2) + dv*deltafun(itestcase==Shu_Vortex)
   vel(3) = velref(3)
   temp   = tref  + dT
   !
@@ -73,7 +80,8 @@ continue
   ! If doing density/entropy transport, make the pressure
   ! constant everywhere and set it to the free-stream pressure
   !
-  pres = merge(pres,pref,any(itestcase==Vortex_Problems))
+  ! pres = merge(pres,pref,any(itestcase==Vortex_Problems))
+  pres = merge(pres,pref,itestcase==Shu_Vortex)
   !
   ! Evaluate the dimensional initial conditions using conserved variables
   !

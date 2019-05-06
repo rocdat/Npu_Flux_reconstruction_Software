@@ -366,15 +366,17 @@ continue
     call memory_pause("initial evaluation of boundary conditions", &
                       "initial TGV KEDR evaluation")
     !
-    if (itestcase == Taylor_Green_Vortex) then
-      call compute_TaylorGreen_KEDR(0,zero)
-      if (dump_memory_usage) then
-        call memory_pause("initial TGV KEDR evaluation","dumping memory usage")
-      else
-        call memory_pause("initial TGV KEDR evaluation", &
-                          "writing initial CGNS file")
-      end if
-    end if
+    ! if (itestcase == Taylor_Green_Vortex) then
+    !   call stop_gfr(stop_mpi,pname,__LINE__,__FILE__, &
+    !     "Taylor Green Vortex is not ready!")
+    !   call compute_TaylorGreen_KEDR(0,zero)
+    !   if (dump_memory_usage) then
+    !     call memory_pause("initial TGV KEDR evaluation","dumping memory usage")
+    !   else
+    !     call memory_pause("initial TGV KEDR evaluation", &
+    !                       "writing initial CGNS file")
+    !   end if
+    ! end if
     !
   end if
   !
@@ -455,7 +457,11 @@ continue
       !
       ! Compute the source terms for the channel flow
       !
-      if (itestcase == Channel_Flow) call channel_source
+      ! if (itestcase == Channel_Flow) then
+      !   call stop_gfr(stop_mpi,pname,__LINE__,__FILE__, &
+      !     "Channel Flow is not ready!")
+      !   call channel_source
+      ! end if
       !
       ! Compute the final residual for each solution point
       !
@@ -734,31 +740,35 @@ continue
       end if
     end if
     !
-    if (itestcase == Taylor_Green_Vortex) then
-      if (write_TaylorGreen_8s_solution) then
-        if (completely_disable_cgns) then
-          write_TaylorGreen_8s_solution = fals
-        else
-          call TaylorGreen_8s_vorticity_solution
-        end if
-      end if
-      if (write_TaylorGreen_full_solution) then
-        if (continuous_output) then
-          call new_write_parallel_cgns
-        else
-          call write_parallel_cgns(CGNS_action)
-        end if
-        write_TaylorGreen_full_solution = fals
-      end if
-    end if
+    ! if (itestcase == Taylor_Green_Vortex) then
+    !   call stop_gfr(stop_mpi,pname,__LINE__,__FILE__, &
+    !     "Taylor Green Vortex is not ready!")
+    !   if (write_TaylorGreen_8s_solution) then
+    !     if (completely_disable_cgns) then
+    !       write_TaylorGreen_8s_solution = fals
+    !     else
+    !       call TaylorGreen_8s_vorticity_solution
+    !     end if
+    !   end if
+    !   if (write_TaylorGreen_full_solution) then
+    !     if (continuous_output) then
+    !       call new_write_parallel_cgns
+    !     else
+    !       call write_parallel_cgns(CGNS_action)
+    !     end if
+    !     write_TaylorGreen_full_solution = fals
+    !   end if
+    ! end if
     !
     ! If solving the Taylor-Green Vortex problem, compute
     ! the various integrated quantities needed to get the
     ! different the kinetic energy dissipation rates
     !
-    if (itestcase == Taylor_Green_Vortex .and. iter/=num_timesteps) then
-      call compute_TaylorGreen_KEDR(iter,dtmin)
-    end if
+    ! if (itestcase == Taylor_Green_Vortex .and. iter/=num_timesteps) then
+    !   call stop_gfr(stop_mpi,pname,__LINE__,__FILE__, &
+    !     "Taylor Green Vortex is not ready!")
+    !   call compute_TaylorGreen_KEDR(iter,dtmin)
+    ! end if
     !
 #ifdef PAUSE_BETWEEN_ITERATIONS
     if (iter /= num_timesteps) then
@@ -804,9 +814,11 @@ continue
   ! finalize the kinetic energy dissipation rates
   !
   if (num_timesteps > 0) then
-    if (itestcase == Taylor_Green_Vortex) then
-      call compute_TaylorGreen_KEDR(-completed_timesteps,dtmin)
-    end if
+    ! if (itestcase == Taylor_Green_Vortex) then
+    !   call stop_gfr(stop_mpi,pname,__LINE__,__FILE__, &
+    !     "Taylor Green Vortex is not ready!")
+    !   call compute_TaylorGreen_KEDR(-completed_timesteps,dtmin)
+    ! end if
   end if
   !
   call write_restart_file(-1)

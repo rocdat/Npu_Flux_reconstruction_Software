@@ -115,11 +115,13 @@ continue
     !
   else
     !
-    if (itestcase == Nozzle_Jet) then
-      call find_elem_for_initial_jet_profile(point_is_in_smc000_nozzle)
-    else if (itestcase == -Nozzle_Jet) then
-      call find_elem_for_initial_jet_profile(point_is_in_arn2_nozzle)
-    end if
+    ! if (itestcase == Nozzle_Jet) then
+    !   call stop_gfr(stop_mpi,pname,__LINE__,__FILE__, &
+    !     "Nozzle Jet is not ready!")
+    !   call find_elem_for_initial_jet_profile(point_is_in_smc000_nozzle)
+    ! else if (itestcase == -Nozzle_Jet) then
+    !   call find_elem_for_initial_jet_profile(point_is_in_arn2_nozzle)
+    ! end if
     !
     allocate ( xyz_init(1:nr,1:maxpts) , source=zero , &
                stat=ierr , errmsg=error_message )
@@ -351,7 +353,10 @@ continue
   ! Output the free-stream conditions
   !
   if (mypnum == glb_root) then
-    if (all(itestcase /= [Density_Transport,Entropy_Transport])) then
+    !
+    ! Drop support for [Density_Transport,Entropy_Transport]
+    ! 2019-05-06, 20:03:25 Jingchang Shi
+    ! if (all(itestcase /= [Density_Transport,Entropy_Transport])) then
       !
       write (iout,10) rhoref,pref,tref,machref,aref,velref(1)
       if (nr >= 2) write (iout,11) velref(2)
@@ -363,13 +368,13 @@ continue
       if (nr == 3) write (iout,22) velref_nd(3)
       write (iout,23) rgasref_nd,cpref_nd,muref_nd
       !
-    else
-      !
-      write (iout,30) rhoref,pref,tref,machref,uref/machref, &
-                      velref(1),velref(2),alpha_aoaref,beta_aoaref,gam, &
-                      rgasref,muref,reyref
-      !
-    end if
+    ! else
+    !   !
+    !   write (iout,30) rhoref,pref,tref,machref,uref/machref, &
+    !                   velref(1),velref(2),alpha_aoaref,beta_aoaref,gam, &
+    !                   rgasref,muref,reyref
+    !   !
+    ! end if
     !
   end if
   !
@@ -491,29 +496,35 @@ continue
   !
   np = size(xyz,dim=2)
   !
-  if (any(itestcase == Transport_Problems)) then
+  ! if (any(itestcase == Transport_Problems)) then
+  if (itestcase == Shu_Vortex) then
     !
     do k = 1,np
       return_value(:,k) = vortex_solution( xyz(:,k) )
     end do
     !
-  else if (itestcase == Taylor_Green_Vortex) then
-    !
-    adj_xyz = xyz ! F2003 AUTO-REALLOCATION
-    !
-    if (postproc_debug_grid) then
-      dl = real(ncell,kind=wp)**(-one3)
-      adj_xyz = PI * (two*dl*xyz - one)
-    end if
-    !
-    do k = 1,np
-      return_value(:,k) = taylor_green_initialization( adj_xyz(:,k) )
-    end do
-    !
-  else if (itestcase == Channel_Flow) then
-    !
-    return_value(:,:) = channel_initialization( xyz(:,:) )
-    !
+  ! else if (itestcase == Taylor_Green_Vortex) then
+  !   !
+  !   call stop_gfr(stop_mpi,pname,__LINE__,__FILE__, &
+  !     "Taylor Green Vortex is not ready!")
+  !   !
+  !   adj_xyz = xyz ! F2003 AUTO-REALLOCATION
+  !   !
+  !   if (postproc_debug_grid) then
+  !     dl = real(ncell,kind=wp)**(-one3)
+  !     adj_xyz = PI * (two*dl*xyz - one)
+  !   end if
+  !   !
+  !   do k = 1,np
+  !     return_value(:,k) = taylor_green_initialization( adj_xyz(:,k) )
+  !   end do
+  !   !
+  ! else if (itestcase == Channel_Flow) then
+  !   !
+  !   call stop_gfr(stop_mpi,pname,__LINE__,__FILE__, &
+  !     "Channel Flow is not ready!")
+  !   return_value(:,:) = channel_initialization( xyz(:,:) )
+  !   !
   else if (mms_opt /= 0) then
     !
     do k = 1,np
@@ -522,81 +533,87 @@ continue
                                                           return_cv=true )
     end do
     !
-  else if (abs(itestcase) == Nozzle_Jet) then
-    !
-    if (init_cond == 2) then
-      !
-      nozzle_len = merge(9.875_wp,7.74_wp,itestcase > 0)
-      !
-      do k = 1,np
-        return_value(:,k) = jet_profile2(nozzle_len,xyz(1,k),bc_in(0)%pv(:))
-      end do
-      !
-    else if (init_cond == 3) then
-      !
-      nozzle_len = merge(9.875_wp,7.74_wp,itestcase > 0)
-      !
-      if (itestcase == Nozzle_Jet) then
-        div = eps1*smc000_interior_wall_radius(one)
-      else if (itestcase == -Nozzle_Jet) then
-        div = eps1*arn2_interior_wall_radius(one)
-      end if
-      !
-      do k = 1,np
-        !
-        if (itestcase == Nozzle_Jet) then
-          r0 = smc000_interior_wall_radius(xyz(1,k))
-        else if (itestcase == -Nozzle_Jet) then
-          r0 = arn2_interior_wall_radius(xyz(1,k))
-        end if
-        r = norm2(xyz(2:,k))
-        return_value(:,k) = jet_profile3(nozzle_len,xyz(1,k),r,r0,div, &
-                                         bc_in(1)%pv(:), &
-                                         bc_in(0)%pv(:))
-        !
-      end do
-      !
-    else if (init_cond /= 0) then
-      !
-      ! div = thickness parameter for shear layer
-      !     = (radius of nozzle at the lip) * 0.1
-      ! NOTE: The nozzle lip should be located at x=0.0 so sending any value
-      !       greater than 0.0 into the function smc000_interior_wall_radius
-      !       should return the radius of the nozzle at the lip.
-      !
-      if (itestcase == Nozzle_Jet) then
-        div = eps1*smc000_interior_wall_radius(one)
-      else if (itestcase == -Nozzle_Jet) then
-        div = eps1*arn2_interior_wall_radius(one)
-      end if
-      !
-      do k = 1,np
-        !
-        if (itestcase == Nozzle_Jet) then
-          r0 = smc000_interior_wall_radius(xyz(1,k))
-        else if (itestcase == -Nozzle_Jet) then
-          r0 = arn2_interior_wall_radius(xyz(1,k))
-        end if
-        r = norm2(xyz(2:,k))
-        return_value(:,k) = jet_profile(r,r0,div,bc_in(0)%pv(:), &
-                                        bc_in(init_cond)%pv(:))
-        !
-      end do
-      !
-    else
-      !
-      do k = 1,np
-        return_value(:,k) = bc_in(init_cond)%cv(:)
-      end do
-      !
-    end if
-    !
-  else if (itestcase == Infinite_Cylinder) then
-    !
-    do k = 1,np
-      return_value(:,k) = initialize_cylinder(xyz(:,k),bc_in(0)%pv(:))
-    end do
-    !
+  ! else if (abs(itestcase) == Nozzle_Jet) then
+  !   !
+  !   call stop_gfr(stop_mpi,pname,__LINE__,__FILE__, &
+  !     "Nozzle Jet is not ready!")
+  !   !
+  !   if (init_cond == 2) then
+  !     !
+  !     nozzle_len = merge(9.875_wp,7.74_wp,itestcase > 0)
+  !     !
+  !     do k = 1,np
+  !       return_value(:,k) = jet_profile2(nozzle_len,xyz(1,k),bc_in(0)%pv(:))
+  !     end do
+  !     !
+  !   else if (init_cond == 3) then
+  !     !
+  !     nozzle_len = merge(9.875_wp,7.74_wp,itestcase > 0)
+  !     !
+  !     if (itestcase == Nozzle_Jet) then
+  !       div = eps1*smc000_interior_wall_radius(one)
+  !     else if (itestcase == -Nozzle_Jet) then
+  !       div = eps1*arn2_interior_wall_radius(one)
+  !     end if
+  !     !
+  !     do k = 1,np
+  !       !
+  !       if (itestcase == Nozzle_Jet) then
+  !         r0 = smc000_interior_wall_radius(xyz(1,k))
+  !       else if (itestcase == -Nozzle_Jet) then
+  !         r0 = arn2_interior_wall_radius(xyz(1,k))
+  !       end if
+  !       r = norm2(xyz(2:,k))
+  !       return_value(:,k) = jet_profile3(nozzle_len,xyz(1,k),r,r0,div, &
+  !                                        bc_in(1)%pv(:), &
+  !                                        bc_in(0)%pv(:))
+  !       !
+  !     end do
+  !     !
+  !   else if (init_cond /= 0) then
+  !     !
+  !     ! div = thickness parameter for shear layer
+  !     !     = (radius of nozzle at the lip) * 0.1
+  !     ! NOTE: The nozzle lip should be located at x=0.0 so sending any value
+  !     !       greater than 0.0 into the function smc000_interior_wall_radius
+  !     !       should return the radius of the nozzle at the lip.
+  !     !
+  !     if (itestcase == Nozzle_Jet) then
+  !       div = eps1*smc000_interior_wall_radius(one)
+  !     else if (itestcase == -Nozzle_Jet) then
+  !       div = eps1*arn2_interior_wall_radius(one)
+  !     end if
+  !     !
+  !     do k = 1,np
+  !       !
+  !       if (itestcase == Nozzle_Jet) then
+  !         r0 = smc000_interior_wall_radius(xyz(1,k))
+  !       else if (itestcase == -Nozzle_Jet) then
+  !         r0 = arn2_interior_wall_radius(xyz(1,k))
+  !       end if
+  !       r = norm2(xyz(2:,k))
+  !       return_value(:,k) = jet_profile(r,r0,div,bc_in(0)%pv(:), &
+  !                                       bc_in(init_cond)%pv(:))
+  !       !
+  !     end do
+  !     !
+  !   else
+  !     !
+  !     do k = 1,np
+  !       return_value(:,k) = bc_in(init_cond)%cv(:)
+  !     end do
+  !     !
+  !   end if
+  !   !
+  ! else if (itestcase == Infinite_Cylinder) then
+  !   !
+  !   call stop_gfr(stop_mpi,pname,__LINE__,__FILE__, &
+  !     "Infinite Cylinder is not ready!")
+  !   !
+  !   do k = 1,np
+  !     return_value(:,k) = initialize_cylinder(xyz(:,k),bc_in(0)%pv(:))
+  !   end do
+  !   !
   else
     !
     do k = 1,np
@@ -1255,9 +1272,10 @@ continue
   !
   ! Set up the base reference conditions
   !
-  if (any(itestcase == Advec_Problems) .or. &
-      abs(itestcase) == Shu_Vortex .or. &
-      itestcase == -Vortex_Transport) then
+  ! if (any(itestcase == Advec_Problems) .or. &
+  !     abs(itestcase) == Shu_Vortex .or. &
+  !     itestcase == -Vortex_Transport) then
+  if ( itestcase == Shu_Vortex ) then
     !
     ! Set up the base reference conditions for different
     ! versions of the isentropic Euler vortex problem
@@ -1267,23 +1285,23 @@ continue
     beta_aoaref = zero
     velref(:) = zero
     !
-    if (itestcase == -Shu_Vortex) then
-      !
-      ! Stationary vortex problem
-      !
-      alpha_aoaref = 90.0_wp
-      itestcase = abs(itestcase)
-      !
-    else if (itestcase == -Vortex_Transport) then
-      !
-      ! Alteration to make the Shu case propagate in the
-      ! y-direction only instead of in both x and y directions
-      !
-      alpha_aoaref = 90.0_wp
-      velref(2) = one
-      itestcase = Shu_Vortex
-      !
-    else
+    ! if (itestcase == -Shu_Vortex) then
+    !   !
+    !   ! Stationary vortex problem
+    !   !
+    !   alpha_aoaref = 90.0_wp
+    !   itestcase = abs(itestcase)
+    !   !
+    ! else if (itestcase == -Vortex_Transport) then
+    !   !
+    !   ! Alteration to make the Shu case propagate in the
+    !   ! y-direction only instead of in both x and y directions
+    !   !
+    !   alpha_aoaref = 90.0_wp
+    !   velref(2) = one
+    !   itestcase = Shu_Vortex
+    !   !
+    ! else
       !
       ! Original Shu vortex problem with diagonal propagation
       !
@@ -1291,7 +1309,7 @@ continue
       velref(1) = one
       velref(2) = one
       !
-    end if
+    ! end if
     !
     machref = one/sqrt(gam)
     aref = one
@@ -1301,40 +1319,43 @@ continue
     tref = one
     rgasref = one
     !
-  else if (itestcase == Taylor_Green_Vortex) then
-    !
-    ! If Lref is negative, the grid was not created on the fly and
-    ! we need to add code to compute Lref and make sure the input
-    ! grid is valid for the Taylor-Green vortex problem
-    !
-    if (Lref <= zero) then
-      write (error_message,101)
-      call stop_gfr(stop_mpi,pname,__LINE__,__FILE__,error_message)
-    end if
-    !
-    ! Set up the base reference conditions for the Taylor-Green Vortex problem
-    !
-    alpha_aoaref = zero
-    beta_aoaref = zero
-    !
-    gam = 1.4_wp
-    tref = 300.0_wp ! (K)
-    pref = 101325.0_wp ! (Pa)
-    ! ( universal gas constant / molecular weight of air )
-    rgasref = 8314.34_wp / 28.9651159_wp ! (J)/(kg*K)
-    rhoref = pref / rgasref / tref ! (kg/m^3) ~ 1.17663794
-    !
-    aref = sqrt( gam*pref/rhoref ) ! (m/s) ~ 347.2169357
-    machref = 0.1_wp
-    uref = aref * machref ! (m/s) ~ 34.72169357
-    !
-    if (reyref <= zero) then
-      reyref = 1600.0_wp
-    end if
-    !
-    suth_Sref = 110.5556_wp
-    suth_Tref = 273.111_wp
-    !
+  ! else if (itestcase == Taylor_Green_Vortex) then
+  !   !
+  !   call stop_gfr(stop_mpi,pname,__LINE__,__FILE__, &
+  !     "Taylor Green Vortex is not ready!")
+  !   !
+  !   ! If Lref is negative, the grid was not created on the fly and
+  !   ! we need to add code to compute Lref and make sure the input
+  !   ! grid is valid for the Taylor-Green vortex problem
+  !   !
+  !   if (Lref <= zero) then
+  !     write (error_message,101)
+  !     call stop_gfr(stop_mpi,pname,__LINE__,__FILE__,error_message)
+  !   end if
+  !   !
+  !   ! Set up the base reference conditions for the Taylor-Green Vortex problem
+  !   !
+  !   alpha_aoaref = zero
+  !   beta_aoaref = zero
+  !   !
+  !   gam = 1.4_wp
+  !   tref = 300.0_wp ! (K)
+  !   pref = 101325.0_wp ! (Pa)
+  !   ! ( universal gas constant / molecular weight of air )
+  !   rgasref = 8314.34_wp / 28.9651159_wp ! (J)/(kg*K)
+  !   rhoref = pref / rgasref / tref ! (kg/m^3) ~ 1.17663794
+  !   !
+  !   aref = sqrt( gam*pref/rhoref ) ! (m/s) ~ 347.2169357
+  !   machref = 0.1_wp
+  !   uref = aref * machref ! (m/s) ~ 34.72169357
+  !   !
+  !   if (reyref <= zero) then
+  !     reyref = 1600.0_wp
+  !   end if
+  !   !
+  !   suth_Sref = 110.5556_wp
+  !   suth_Tref = 273.111_wp
+  !   !
   else
     !
     ! Set up the base reference conditions based
@@ -1996,7 +2017,9 @@ continue
         bface(6,nf) = i
         !
         ! Force the boundary condition to that specified in the input file
-        bface(1,nf) = bc_in(i)%bc_type
+        ! Do not modify bface anymore. bface(6,nf) provides the index of bc_in.
+        ! So we modify bface(6,nf) in this create_bc_in subroutine.
+        ! bface(1,nf) = bc_in(i)%bc_type
         !
       end if
       !

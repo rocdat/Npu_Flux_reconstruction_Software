@@ -114,56 +114,59 @@ continue
   !
  !write (iout,1) time,dtmin,time+dtmin
   !
-  if (itestcase == Taylor_Green_Vortex) then
-    !
-    tstar = time*time_ref
-    new_tstar = tstar + dtmin*time_ref
-    !
-    if (tstar < eight .and. new_tstar >= eight) then
-      !
-      dtmin = (eight - tstar) / time_ref
-      dtsp(:) = dtmin
-      write_TaylorGreen_8s_solution = true
-      !
-    else if (tstar < three .and. new_tstar >= three) then
-      !
-      dtmin = (three - tstar) / time_ref
-      dtsp(:) = dtmin
-      write_TaylorGreen_full_solution = true
-      !
-    else if (tstar < five .and. new_tstar >= five) then
-      !
-      dtmin = (five - tstar) / time_ref
-      dtsp(:) = dtmin
-      write_TaylorGreen_full_solution = true
-      !
-    else if (tstar < seven .and. new_tstar >= seven) then
-      !
-      dtmin = (seven - tstar) / time_ref
-      dtsp(:) = dtmin
-      write_TaylorGreen_full_solution = true
-      !
-    else if (tstar < nine .and. new_tstar >= nine) then
-      !
-      dtmin = (nine - tstar) / time_ref
-      dtsp(:) = dtmin
-      write_TaylorGreen_full_solution = true
-      !
-    else if (tstar < 11.0_wp .and. new_tstar >= 11.0_wp) then
-      !
-      dtmin = (11.0_wp - tstar) / time_ref
-      dtsp(:) = dtmin
-      write_TaylorGreen_full_solution = true
-      !
-    else if (tstar < 15.0_wp .and. new_tstar >= 15.0_wp) then
-      !
-      dtmin = (15.0_wp - tstar) / time_ref
-      dtsp(:) = dtmin
-      write_TaylorGreen_full_solution = true
-      !
-    end if
-    !
-  end if
+  ! if (itestcase == Taylor_Green_Vortex) then
+  !   !
+  !   call stop_gfr(stop_mpi,pname,__LINE__,__FILE__, &
+  !     "Taylor Green Vortex is not ready!")
+  !   !
+  !   tstar = time*time_ref
+  !   new_tstar = tstar + dtmin*time_ref
+  !   !
+  !   if (tstar < eight .and. new_tstar >= eight) then
+  !     !
+  !     dtmin = (eight - tstar) / time_ref
+  !     dtsp(:) = dtmin
+  !     write_TaylorGreen_8s_solution = true
+  !     !
+  !   else if (tstar < three .and. new_tstar >= three) then
+  !     !
+  !     dtmin = (three - tstar) / time_ref
+  !     dtsp(:) = dtmin
+  !     write_TaylorGreen_full_solution = true
+  !     !
+  !   else if (tstar < five .and. new_tstar >= five) then
+  !     !
+  !     dtmin = (five - tstar) / time_ref
+  !     dtsp(:) = dtmin
+  !     write_TaylorGreen_full_solution = true
+  !     !
+  !   else if (tstar < seven .and. new_tstar >= seven) then
+  !     !
+  !     dtmin = (seven - tstar) / time_ref
+  !     dtsp(:) = dtmin
+  !     write_TaylorGreen_full_solution = true
+  !     !
+  !   else if (tstar < nine .and. new_tstar >= nine) then
+  !     !
+  !     dtmin = (nine - tstar) / time_ref
+  !     dtsp(:) = dtmin
+  !     write_TaylorGreen_full_solution = true
+  !     !
+  !   else if (tstar < 11.0_wp .and. new_tstar >= 11.0_wp) then
+  !     !
+  !     dtmin = (11.0_wp - tstar) / time_ref
+  !     dtsp(:) = dtmin
+  !     write_TaylorGreen_full_solution = true
+  !     !
+  !   else if (tstar < 15.0_wp .and. new_tstar >= 15.0_wp) then
+  !     !
+  !     dtmin = (15.0_wp - tstar) / time_ref
+  !     dtsp(:) = dtmin
+  !     write_TaylorGreen_full_solution = true
+  !     !
+  !   end if
+  !   !
+  ! end if
   !
   time = time + dtmin
   d_t = dtmin
@@ -776,13 +779,15 @@ continue
   ! Zero out the residuals for all but the density
   ! equation if running the density transport test case
   !
-  if (itestcase == Density_Transport) then
-    do n = 1,n_solpts
-      do m = nec+1,nq
-        residual(m,n) = residual(nec,n)
-      end do
-    end do
-  end if
+  ! if (itestcase == Density_Transport) then
+  !   call stop_gfr(stop_mpi,pname,__LINE__,__FILE__, &
+  !     "Density Transport is not ready!")
+  !   do n = 1,n_solpts
+  !     do m = nec+1,nq
+  !       residual(m,n) = residual(nec,n)
+  !     end do
+  !   end do
+  ! end if
   !
   if (p_order < n_order) then
     call project_to_porder(cell,residual)

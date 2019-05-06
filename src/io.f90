@@ -56,6 +56,9 @@ module io_mod
   ! wall solution time averaged CGNS file name format
   character(len=170),      save :: wst_cgnsfile_fmt
   !
+  ! Flag whether a wall BC exists
+  logical, save :: bc_wall_exists = fals
+  !
   !.. CGNS Path Variables ..
   integer(CBT),      save :: ifile_n
   integer(CBT),      save :: ibase_n
@@ -512,9 +515,11 @@ continue
     !
   end if
   !
-  if (itestcase == Channel_Flow) then
-    call read_channel_init_file
-  end if
+  ! if (itestcase == Channel_Flow) then
+  !   call stop_gfr(stop_mpi,pname,__LINE__,__FILE__, &
+  !     "Channel Flow is not ready!")
+  !   call read_channel_init_file
+  ! end if
   !
   ! Initialize the reference conditions
   !
@@ -522,7 +527,8 @@ continue
   !
   ! Compute periodic information for the transport problems
   !
-  if (any(itestcase == Transport_Problems)) then
+  ! if (any(itestcase == Transport_Problems)) then
+  if (itestcase == Shu_Vortex) then
     !
     cfl = one
     cfl_beg = one
@@ -596,44 +602,51 @@ continue
     end if
    !if (mypnum == 0) write (*,*) Period_Time,Total_Periods,Final_Time
     !
-    num_timesteps = nint( Final_Time / constant_dt )
+    ! Let the input file dominate everything instead of defining things
+    ! secretly in the code.
+    ! num_timesteps = nint( Final_Time / constant_dt )
     !
-  else if (itestcase == Taylor_Green_Vortex) then
-    !
-   !cfl_beg = CFL
-   !cfl_end = CFL
-   !cfl_cycles = 1
-    !
-    ! Set the variable time_ref to adjust our nondimension time to match
-    ! the nondimensional time used for the Taylor-Green Vortex problem
-    !
-    time_ref = machref
-    !
-    if (Final_Time > zero) then
-      !
-      ! Need to adjust the nondimensional final time which uses uref as the
-      ! velocity for nondimensionalization and we use aref within the code
-      !
-      num_timesteps = nint( Final_Time / constant_dt )
-      !
-     !Final_Time = Final_Time * time_ref
-      !
-    end if
-    !
-    ! Make sure the timestep type is global (positive)
-    !
-    Timestep_Type = abs(Timestep_Type)
-    !
+  ! else if (itestcase == Taylor_Green_Vortex) then
+  !   !
+  !   call stop_gfr(stop_mpi,pname,__LINE__,__FILE__, &
+  !     "Taylor Green Vortex is not ready!")
+  !   !
+  !  !cfl_beg = CFL
+  !  !cfl_end = CFL
+  !  !cfl_cycles = 1
+  !   !
+  !   ! Set the variable time_ref to adjust our nondimension time to match
+  !   ! the nondimensional time used for the Taylor-Green Vortex problem
+  !   !
+  !   time_ref = machref
+  !   !
+  !   if (Final_Time > zero) then
+  !     !
+  !     ! Need to adjust the nondimensional final time which uses uref as the
+  !     ! velocity for nondimensionalization and we use aref within the code
+  !     !
+  !     num_timesteps = nint( Final_Time / constant_dt )
+  !     !
+  !    !Final_Time = Final_Time * time_ref
+  !     !
+  !   end if
+  !   !
+  !   ! Make sure the timestep type is global (positive)
+  !   !
+  !   Timestep_Type = abs(Timestep_Type)
+  !   !
   else
     !
     ! Set time_ref to Lref/aref for nondimensionalizing time
     ! NOTE: Lref is always just one
     !
-    if (itestcase == Infinite_Cylinder) then
-      time_ref = machref
-    else
+    ! if (itestcase == Infinite_Cylinder) then
+    !   call stop_gfr(stop_mpi,pname,__LINE__,__FILE__, &
+    !     "Infinite Cylinder is not ready!")
+    !   time_ref = machref
+    ! else
       time_ref = one / aref
-    end if
+    ! end if
     !
     if (convert_restart_to_cgns) then
       !
@@ -680,7 +693,8 @@ continue
   !
   ! Determine the frequency of dumping the results and solution files
   !
-  if (any(itestcase == Transport_Problems)) then
+  ! if (any(itestcase == Transport_Problems)) then
+  if (itestcase == Shu_Vortex) then
     !
     if (results_interval == 0) then
       results_interval = max(Period_Timesteps/500,1)
@@ -709,11 +723,13 @@ continue
     end if
     results_interval = max(results_interval,1)
     !
-    if (itestcase == Taylor_Green_Vortex) then
-      if (output_interval == 0) then
-        disable_cgns_output = true
-      end if
-    end if
+    ! if (itestcase == Taylor_Green_Vortex) then
+    !   call stop_gfr(stop_mpi,pname,__LINE__,__FILE__, &
+    !     "Taylor Green Vortex is not ready!")
+    !   if (output_interval == 0) then
+    !     disable_cgns_output = true
+    !   end if
+    ! end if
     !
     if (output_interval == 0) then
       output_interval = num_timesteps/50
@@ -1359,14 +1375,15 @@ continue
     ! Drop the support for PLOT3D format. The design of BC is bad. Forcus on
     ! GMSH format. 2019-04-19, 13:43:54. Jingchang Shi
     call stop_gfr(stop_mpi,pname,__LINE__,__FILE__, &
-      'PLOT3D grid format is not supported for now!')
+      'CGNS grid format is not supported for now!')
     call read_cgns_gridfile( gridfile )
-  else if (grid_format == Plot3D_Format) then
-    ! Drop the support for PLOT3D format. The design of BC is bad. Forcus on
-    ! GMSH format. 2019-04-19, 13:43:54. Jingchang Shi
-    call stop_gfr(stop_mpi,pname,__LINE__,__FILE__, &
-      'PLOT3D grid format is not supported for now!')
-    ! call read_plot3d_gridfile( gridfile , plot3d_cutfile , plot3d_bcsfile )
+  ! else if (grid_format == Plot3D_Format) then
+  !   ! Drop the support for PLOT3D format. The design of BC is bad. Forcus on
+  !   ! GMSH format. 2019-04-19, 13:43:54. Jingchang Shi
+  !   call stop_gfr(stop_mpi,pname,__LINE__,__FILE__, &
+  !     'PLOT3D grid format is not supported for now!')
+  !   call read_plot3d_gridfile( gridfile , plot3d_cutfile , plot3d_bcsfile )
+  !   !
   end if
   !
   if (.not. allocated(grid)) then
@@ -3759,6 +3776,7 @@ subroutine write_parallel_cgns(iflag)
   use ovar, only : write_TaylorGreen_full_solution
   use ovar, only : completely_disable_cgns
   use ovar, only : output_time_averaging
+  use geovar, only : bface
   !
   !.. Formal Arguments ..
   integer, intent(in) :: iflag
@@ -3803,9 +3821,17 @@ continue
     !
     call write_parallel_cgns_grid_file
     !
-    ! Create the CGNS grid file for the wall surface
+    ! First check if there are wall BCS. If not, do not enter this subroutine.
+    bc_wall_exists = any( bface(1,:) == bc_walls )
+    call mpi_allreduce(MPI_IN_PLACE,bc_wall_exists,1_int_mpi,MPI_LOGICAL, &
+      MPI_LOR,MPI_COMM_WORLD,mpierr)
     !
-    call write_parallel_cgns_wall_grid_file
+    if ( bc_wall_exists ) then
+      !
+      ! Create the CGNS grid file for the wall surface
+      call write_parallel_cgns_wall_grid_file
+      !
+    end if
     !
     ! Initialize the zone counter
     !
@@ -3842,8 +3868,16 @@ continue
   ! Write the solution file
   !
   if (output_time_averaging) then
+    !
     call write_parallel_cgns_time_ave_file
-    call write_parallel_cgns_wall_time_ave_file(wall_sol_taver_fname)
+    !
+    if ( bc_wall_exists ) then
+      !
+      ! Write the time averaged CGNS file for the wall surface
+      call write_parallel_cgns_wall_time_ave_file(wall_sol_taver_fname)
+      !
+    end if
+    !
   end if
   !
   ! ################################################
@@ -4340,16 +4374,18 @@ continue
   ! be output if running the Taylor-Green vortex problem.
   !
   need_vorticity = fals
-  if (itestcase == Taylor_Green_Vortex) then
-    one_pass_loop: do nc = 1,1
-      do n = 1,size(char_sdefault)
-        if (adjustl(trim(char_sdefault(n))) == "Vorticity") then
-          exit one_pass_loop
-        end if
-      end do
-      need_vorticity = true
-    end do one_pass_loop
-  end if
+  ! if (itestcase == Taylor_Green_Vortex) then
+  !   call stop_gfr(stop_mpi,pname,__LINE__,__FILE__, &
+  !     "Taylor Green Vortex is not ready!")
+  !   one_pass_loop: do nc = 1,1
+  !     do n = 1,size(char_sdefault)
+  !       if (adjustl(trim(char_sdefault(n))) == "Vorticity") then
+  !         exit one_pass_loop
+  !       end if
+  !     end do
+  !     need_vorticity = true
+  !   end do one_pass_loop
+  ! end if
   !
  !char_sname = char_sdefault ! USING F2003 AUTO-REALLOCATION
  !if (need_vorticity) then
@@ -4797,7 +4833,13 @@ continue
           n = n + 1
           vartmp(1:npts) = interp_usp(nec,1:npts)
           vartmp(:) = vartmp * rhoref
-          if (itestcase == Freestream_Preservation) vartmp(:) = vartmp - rhoref
+          !
+          ! if (itestcase == Freestream_Preservation) then
+          !   call stop_gfr(stop_mpi,pname,__LINE__,__FILE__, &
+          !     "Freestream Preservation is not ready!")
+          !   vartmp(:) = vartmp - rhoref
+          ! end if
+          !
           call cgns_write_field_parallel
         case ("Momentum") ! Momentum
           do m = nmb,nme
@@ -4840,16 +4882,26 @@ continue
             vartmp(1:npts) = interp_usp(m,1:npts) / &
                              interp_usp(nec,1:npts)
             vartmp(:) = vartmp * aref
-            if (itestcase == Freestream_Preservation) then
-              if (m == nmb) vartmp(:) = vartmp - aref*machref
-            end if
+            !
+            ! if (itestcase == Freestream_Preservation) then
+            !   call stop_gfr(stop_mpi,pname,__LINE__,__FILE__, &
+            !     "Freestream Preservation is not ready!")
+            !   if (m == nmb) vartmp(:) = vartmp - aref*machref
+            ! end if
+            !
             call cgns_write_field_parallel
           end do
         case ("Pressure") ! Pressure
           n = n + 1
           vartmp(:) = pressure_cv( interp_usp )
           vartmp(:) = vartmp * rhoref * aref * aref
-          if (itestcase == Freestream_Preservation) vartmp(:) = vartmp - pref
+          !
+          ! if (itestcase == Freestream_Preservation) then
+          !   call stop_gfr(stop_mpi,pname,__LINE__,__FILE__, &
+          !     "Freestream Preservation is not ready!")
+          !   vartmp(:) = vartmp - pref
+          ! end if
+          !
           call cgns_write_field_parallel
         case ("P0") ! Total Pressure
           n = n + 1
@@ -4859,23 +4911,35 @@ continue
         case ("Mach") ! Mach number
           n = n + 1
           vartmp(:) = mach_number_cv( interp_usp )
-          if (itestcase == Freestream_Preservation) vartmp(:) = vartmp - machref
+          !
+          ! if (itestcase == Freestream_Preservation) then
+          !   call stop_gfr(stop_mpi,pname,__LINE__,__FILE__, &
+          !     "Freestream Preservation is not ready!")
+          !   vartmp(:) = vartmp - machref
+          ! end if
+          !
           call cgns_write_field_parallel
         case ("Entropy") ! Entropy
           n = n + 1
-          if (itestcase == Inviscid_Gaussian_Bump) then
-            vartmp(:) = entropy_cv( interp_usp , log_opt=fals , &
-                                                 use_pref_nd=true )
-            vartmp(:) = abs( one - vartmp(:) )
-          else
+          ! if (itestcase == Inviscid_Gaussian_Bump) then
+            ! vartmp(:) = entropy_cv( interp_usp , log_opt=fals , &
+                                                 ! use_pref_nd=true )
+            ! vartmp(:) = abs( one - vartmp(:) )
+          ! else
             vartmp(:) = entropy_cv( interp_usp )
-          end if
+          ! end if
           call cgns_write_field_parallel
         case ("Temperature") ! Temperature
           n = n + 1
           vartmp(:) = temperature_cv( interp_usp )
           vartmp(:) = vartmp * tref
-          if (itestcase == Freestream_Preservation) vartmp(:) = vartmp - tref
+          !
+          ! if (itestcase == Freestream_Preservation) then
+          !   call stop_gfr(stop_mpi,pname,__LINE__,__FILE__, &
+          !     "Freestream Preservation is not ready!")
+          !   vartmp(:) = vartmp - tref
+          ! end if
+          !
           call cgns_write_field_parallel
         case ("T0") ! Total Temperature
           n = n + 1

@@ -1,8 +1,8 @@
 module ovar
   !
   use module_kind_types, only : wp,lk,ldk,fals,true
+  use module_kind_types, only : Gmsh_Format
   use module_kind_types, only : NavierStokes_Eqns
-  use module_kind_types, only : Internally_Generated_Grid
   use module_kind_types, only : Legendre_Gauss,Legendre_Gauss_Lobatto
   use module_kind_types, only : Equi_Distant_Points
   use module_kind_types, only : TVD3_RK
@@ -144,7 +144,7 @@ module ovar
   ! #############################
   !
   ! GRID INFORMATION
-  integer,            public, save :: grid_format = Internally_Generated_Grid
+  integer,            public, save :: grid_format = Gmsh_Format
   character(len=150), public, save :: gridfile = ""
   character(len=150), public, save :: plot3d_cutfile = ""
   character(len=150), public, save :: plot3d_bcsfile = ""

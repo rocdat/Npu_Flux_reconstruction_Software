@@ -120,13 +120,13 @@ continue
       !
       ! Error for conserved variables at the current solution point
       !
-      if (itestcase == Inviscid_Gaussian_Bump) then
-        sn = entropy_cv_sp( unew(:,k) , log_opt=fals , use_pref_nd=true )
-        se = one
-      else
+      ! if (itestcase == Inviscid_Gaussian_Bump) then
+      !   sn = entropy_cv_sp( unew(:,k) , log_opt=fals , use_pref_nd=true )
+      !   se = one
+      ! else
         sn = entropy_cv_sp( unew(:,k) )
         se = entropy_cv_sp( uold(:,k) )
-      end if
+      ! end if
       !
       ett(1:nq,1) = abs( unew(:,k) - uold(:,k) )
       ett(nq+1,1) = sn - se
@@ -268,7 +268,8 @@ continue
   ! Maximum L2 norm of density for the current simulation
   rl2mx = max( rltwo , rl2mx )
   !
-  if (any(itestcase == Transport_Problems)) then
+  ! if (any(itestcase == Transport_Problems)) then
+  if (itestcase == Shu_Vortex) then
     !
     output_L2val = entL2
     convergence_reached = fals
@@ -305,9 +306,11 @@ continue
     if (itcur > minimum_timesteps) then
       convergence_reached = (-orders_converged <= convergence_order_max_res) &
                             .or. (log10(rltwo) <= convergence_order_abs_res)
-      if (itestcase == Taylor_Green_Vortex) then
-        convergence_reached = fals
-      end if
+      ! if (itestcase == Taylor_Green_Vortex) then
+      !   call stop_gfr(stop_mpi,pname,__LINE__,__FILE__, &
+      !     "Taylor Green Vortex is not ready!")
+      !   convergence_reached = fals
+      ! end if
     end if
     !
   end if
@@ -470,21 +473,24 @@ continue
   !
   ! Now get the format for the header
   !
-  if (any(itestcase == Transport_Problems)) then
+  ! if (any(itestcase == Transport_Problems)) then
+  if (itestcase == Shu_Vortex) then
     write (iter_header,200) final_iter_digits-3, &
                             max_cell_digits-2, &
                             max_solpt_digits-3
-  else if (itestcase == Laminar_BndLyr) then
-    write (iter_header,201) final_iter_digits-3, &
-                            max_cell_digits-2, &
-                            max_solpt_digits-3
-  else if (itestcase == Taylor_Green_Vortex) then
-   !write (iter_header,203) final_iter_digits-3, &
-    write (iter_header,202) final_iter_digits-3, &
-                            max_cell_digits-2, &
-                            max_solpt_digits-3
- !else if (output_time_averaging) then
- !  write (iter_header,204) final_iter_digits-3
+  ! else if (itestcase == Laminar_BndLyr) then
+  !   write (iter_header,201) final_iter_digits-3, &
+  !                           max_cell_digits-2, &
+  !                           max_solpt_digits-3
+ !  else if (itestcase == Taylor_Green_Vortex) then
+ !    call stop_gfr(stop_mpi,pname,__LINE__,__FILE__, &
+ !      "Taylor Green Vortex is not ready!")
+ !   !write (iter_header,203) final_iter_digits-3, &
+ !    write (iter_header,202) final_iter_digits-3, &
+ !                            max_cell_digits-2, &
+ !                            max_solpt_digits-3
+ ! !else if (output_time_averaging) then
+ ! !  write (iter_header,204) final_iter_digits-3
   else
     write (iter_header,202) final_iter_digits-3, &
                             max_cell_digits-2, &
@@ -774,7 +780,8 @@ continue
       vold(1:nq,1:nep) = usp2v( uold(1:nq,1:nep) , swap_t_for_rho=true )
     end if
     !
-  else if (any(itestcase == Transport_Problems)) then
+  ! else if (any(itestcase == Transport_Problems)) then
+  else if (itestcase == Shu_Vortex) then
     !
     ! Evaluate the exact analytical solution to the vortex transport problem
     !
@@ -788,18 +795,21 @@ continue
       vold(1:nq,1:nep) = usp2v( uold(1:nq,1:nep) , swap_t_for_rho=true )
     end if
     !
-  else if (itestcase == Freestream_Preservation) then
-    !
-    do k = 1,nep
-      uold(1:nq,k) = bc_in(0)%cv(1:nq)
-    end do
-    !
-    if (present(vold)) then
-      do k = 1,nep
-        vold(1:nq,k) = bc_in(0)%pv(1:nq)
-      end do
-    end if
-    !
+  ! else if (itestcase == Freestream_Preservation) then
+  !   !
+  !   call stop_gfr(stop_mpi,pname,__LINE__,__FILE__, &
+  !     "Freestream Preservation is not ready!")
+  !   !
+  !   do k = 1,nep
+  !     uold(1:nq,k) = bc_in(0)%cv(1:nq)
+  !   end do
+  !   !
+  !   if (present(vold)) then
+  !     do k = 1,nep
+  !       vold(1:nq,k) = bc_in(0)%pv(1:nq)
+  !     end do
+  !   end if
+  !   !
   else
     !
     if (output_time_averaging) then

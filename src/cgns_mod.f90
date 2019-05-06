@@ -363,13 +363,15 @@ continue
     !
     call transfer_cgns_data_to_grid_dt
     !
-    if (itestcase == Nozzle_Jet) then
-      if (create_nozzle_interior_cgns_gridfile) then
-        call extract_nozzle_grid
-      else
-        call find_elem_for_initial_jet_profile
-      end if
-    end if
+    ! if (itestcase == Nozzle_Jet) then
+    !   call stop_gfr(stop_mpi,pname,__LINE__,__FILE__, &
+    !     "Nozzle Jet is not ready!")
+    !   if (create_nozzle_interior_cgns_gridfile) then
+    !     call extract_nozzle_grid
+    !   else
+    !     call find_elem_for_initial_jet_profile
+    !   end if
+    ! end if
     !
     ! Create the arrays needed by the solver that define the grid
     ! geometry: bface, nodes_of_cell_ptr, nodes_of_cell, etc.
