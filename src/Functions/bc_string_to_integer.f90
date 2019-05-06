@@ -76,6 +76,17 @@ continue
   ! Use the character string given in the PhysicalName
   ! section to set the value of the boundary condition\
   !
+  ! For periodic BC. First check the ending number.
+  ne = len_trim(adjustl(text))
+  n = char2integer(text(ne:ne))
+  if ( n /= -1 ) then
+    !
+    ! The ending number is an integer. This is a periodic BC
+    ! Remove the ending dash and integer.
+    text = text(1:ne-2)
+    !
+  end if
+  !
   select case (trim(adjustl(text)))
     !
     case ("MESHINTERIOR","INTERIOR")
@@ -123,7 +134,13 @@ continue
     case ("SYMM","SYMMETRY","SYMMETRYPLANE")
       return_value = bc_symmetry
     case ("PERIODIC")
-      return_value = bc_periodic
+      !
+      ! Periodic BC must be in pair. So check the ending number of periodic BC
+      ! to see if it is odd or even.
+      nb = ceiling(real(n)/2)
+      ne = merge(nb,-nb,modulo(n,2)==1)
+      ! So the periodic BC
+      return_value = bc_periodic_list(ne)
     case ("MMS_DIRICHLET","MMSDIRICHLET")
       return_value = bc_mms_dirichlet
       !
@@ -150,9 +167,27 @@ continue
       return_value = bc_unknown
       !
   end select
-
   !
 end function bc_string_to_integer
 !
 !###############################################################################
 !
+pure function char2integer(in_char) result(out_int)
+  !
+  implicit none
+  !
+  character, intent(in) :: in_char
+  logical :: is_int
+  integer :: out_int
+  integer :: err
+  !
+continue
+  !
+  read(in_char,*,iostat=err) out_int
+  is_int = err == 0
+  !
+  ! If in_char is not an integer, return -1 as a flag
+  out_int = merge(out_int,-1,is_int)
+  !
+end function char2integer
+

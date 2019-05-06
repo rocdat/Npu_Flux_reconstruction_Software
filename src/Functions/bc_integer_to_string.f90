@@ -6,58 +6,57 @@ elemental function bc_integer_to_string(ibc) result(return_value)
   !
 continue
   !
-  select case (ibc)
-    case (bc_generic_inflow)
-      return_value = "generic_inflow"
-    case (bc_sub_inflow)
-      return_value = "sub_inflow"
-    case (bc_sup_inflow)
-      return_value = "sup_inflow"
-    case (bc_mdot_inflow)
-      return_value = "mdot_inflow"
-    case (bc_generic_outflow)
-      return_value = "generic_outflow"
-    case (bc_sub_outflow)
-      return_value = "sub_outflow"
-    case (bc_sup_outflow)
-      return_value = "sup_outflow"
-    case (bc_mdot_outflow)
-      return_value = "mdot_outflow"
-    case (bc_generic_freeflow)
-      return_value = "generic_freeflow"
-    case (bc_characteristic)
-      return_value = "characteristic"
-    case (bc_freestream)
-      return_value = "freestream"
-    case (bc_fixed)
-      return_value = "fixed"
-    case (bc_custom_profile)
-      return_value = "custom_profile"
-    case (bc_turbulence_generation)
-      return_value = "turbulence_generation"
-    case (bc_slip_wall)
-      return_value = "slip_wall"
-    case (bc_euler_wall)
-      return_value = "euler_wall"
-    case (bc_adiabatic_wall)
-      return_value = "adiabatic_wall"
-    case (bc_isothermal_wall)
-      return_value = "isothermal_wall"
-    case (not_a_bc)
-      return_value = "not_a_bc"
-    case (bc_symmetry)
-      return_value = "symmetry"
-    case (bc_periodic)
-      return_value = "periodic"
-    case (bc_mms_dirichlet)
-      return_value = "MMS_dirichlet"
-    case (bc_cpu_bnd)
-      return_value = "cpu_bnd"
-    case (bc_unknown)
-      return_value = "unknown"
-    case default
-      return_value = "BC_INTEGER_TO_STRING ERROR!!"
-  end select
+  if ( ibc == bc_generic_inflow ) then
+    return_value = "generic_inflow"
+  else if ( ibc == bc_sub_inflow ) then
+    return_value = "sub_inflow"
+  else if ( ibc == bc_sup_inflow ) then
+    return_value = "sup_inflow"
+  else if ( ibc == bc_mdot_inflow ) then
+    return_value = "mdot_inflow"
+  else if ( ibc == bc_generic_outflow ) then
+    return_value = "generic_outflow"
+  else if ( ibc == bc_sub_outflow ) then
+    return_value = "sub_outflow"
+  else if ( ibc == bc_sup_outflow ) then
+    return_value = "sup_outflow"
+  else if ( ibc == bc_mdot_outflow ) then
+    return_value = "mdot_outflow"
+  else if ( ibc == bc_generic_freeflow ) then
+    return_value = "generic_freeflow"
+  else if ( ibc == bc_characteristic ) then
+    return_value = "characteristic"
+  else if ( ibc == bc_freestream ) then
+    return_value = "freestream"
+  else if ( ibc == bc_fixed ) then
+    return_value = "fixed"
+  else if ( ibc == bc_custom_profile ) then
+    return_value = "custom_profile"
+  else if ( ibc == bc_turbulence_generation ) then
+    return_value = "turbulence_generation"
+  else if ( ibc == bc_slip_wall ) then
+    return_value = "slip_wall"
+  else if ( ibc == bc_euler_wall ) then
+    return_value = "euler_wall"
+  else if ( ibc == bc_adiabatic_wall ) then
+    return_value = "adiabatic_wall"
+  else if ( ibc == bc_isothermal_wall ) then
+    return_value = "isothermal_wall"
+  else if ( ibc == not_a_bc ) then
+    return_value = "not_a_bc"
+  else if ( ibc == bc_symmetry ) then
+    return_value = "symmetry"
+  else if ( any( ibc == bc_periodic_list ) ) then
+    return_value = "periodic"
+  else if ( ibc == bc_mms_dirichlet ) then
+    return_value = "MMS_dirichlet"
+  else if ( ibc == bc_cpu_bnd ) then
+    return_value = "cpu_bnd"
+  else if ( ibc == bc_unknown ) then
+    return_value = "unknown"
+  else
+    return_value = "BC_INTEGER_TO_STRING ERROR!!"
+  end if
   !
   return_value = uppercase(return_value)
   !

@@ -94,175 +94,174 @@ continue
     ! Compute the solution at the boundary flux points
     ! based on the specified boundary condition
     !
-    select case (bface(1,nf))
+    if ( bface(1,nf) == bc_freestream ) then
       !
-      case (bc_freestream)
-        !
-        ! Free stream boundary condition
-        !
-        call get_bc_freestream_solution(faceusp(nf)%v(:,:,2), &
-                                        bc_in(0)%cv)
-        !
-      case (bc_fixed)
-        !
-        ! Free stream boundary condition
-        !
-        call get_bc_freestream_solution(faceusp(nf)%v(:,:,2), &
-                                        bc_in(bc_idx)%cv)
-        !
-      case (bc_characteristic)
-        !
-        ! Characteristic boundary condition
-        !
-       !call get_bc_characteristic_solution(faceusp(nf)%v(:,:,1), &
-       !                                    faceusp(nf)%v(:,:,2), &
-       !                                    geofa(nf)%v(:,:), &
-       !                                    bc_in(bc_idx)%cv, &
-       !                                    bc_in(bc_idx)%pv)
-        call get_bc_characteristic_solution(faceusp(nf)%v(:,:,1), &
-                                            faceusp(nf)%v(:,:,2), &
-                                            geofa(nf)%v(:,:), &
-                                            bc_in(bc_idx)%pv, &
-                                            bc_in(bc_idx)%relax)
-        !
-      case (bc_generic_inflow)
-        !
-        ! Generic inflow boundary condition
-        !
-        call get_bc_generic_inflow_solution(faceusp(nf)%v(:,:,1), &
+      ! Free stream boundary condition
+      !
+      call get_bc_freestream_solution(faceusp(nf)%v(:,:,2), &
+                                      bc_in(0)%cv)
+      !
+    else if ( bface(1,nf) == bc_fixed ) then
+      !
+      ! Free stream boundary condition
+      !
+      call get_bc_freestream_solution(faceusp(nf)%v(:,:,2), &
+                                      bc_in(bc_idx)%cv)
+      !
+    else if ( bface(1,nf) == bc_characteristic ) then
+      !
+      ! Characteristic boundary condition
+      !
+      !call get_bc_characteristic_solution(faceusp(nf)%v(:,:,1), &
+      !                                    faceusp(nf)%v(:,:,2), &
+      !                                    geofa(nf)%v(:,:), &
+      !                                    bc_in(bc_idx)%cv, &
+      !                                    bc_in(bc_idx)%pv)
+      call get_bc_characteristic_solution(faceusp(nf)%v(:,:,1), &
+                                          faceusp(nf)%v(:,:,2), &
+                                          geofa(nf)%v(:,:), &
+                                          bc_in(bc_idx)%pv, &
+                                          bc_in(bc_idx)%relax)
+      !
+    else if ( bface(1,nf) == bc_generic_inflow ) then
+      !
+      ! Generic inflow boundary condition
+      !
+      call get_bc_generic_inflow_solution(faceusp(nf)%v(:,:,1), &
+                                          faceusp(nf)%v(:,:,2), &
+                                          geofa(nf)%v(:,:), &
+                                          bc_in(bc_idx)%cv, &
+                                          bc_in(bc_idx)%pv)
+      !
+    else if ( bface(1,nf) == bc_generic_outflow) then
+      !
+      ! Generic outflow boundary condition
+      !
+      call get_bc_generic_outflow_solution(faceusp(nf)%v(:,:,1), &
+                                           faceusp(nf)%v(:,:,2), &
+                                           geofa(nf)%v(:,:), &
+                                           bc_in(bc_idx)%pv)
+      !
+    else if ( bface(1,nf) == bc_generic_freeflow) then
+      !
+      ! Generic freeflow boundary condition
+      !
+      call get_bc_generic_freeflow_solution(faceusp(nf)%v(:,:,1), &
                                             faceusp(nf)%v(:,:,2), &
                                             geofa(nf)%v(:,:), &
                                             bc_in(bc_idx)%cv, &
                                             bc_in(bc_idx)%pv)
-        !
-      case (bc_generic_outflow)
-        !
-        ! Generic outflow boundary condition
-        !
-        call get_bc_generic_outflow_solution(faceusp(nf)%v(:,:,1), &
-                                             faceusp(nf)%v(:,:,2), &
-                                             geofa(nf)%v(:,:), &
-                                             bc_in(bc_idx)%pv)
-        !
-      case (bc_generic_freeflow)
-        !
-        ! Generic freeflow boundary condition
-        !
-        call get_bc_generic_freeflow_solution(faceusp(nf)%v(:,:,1), &
-                                              faceusp(nf)%v(:,:,2), &
-                                              geofa(nf)%v(:,:), &
-                                              bc_in(bc_idx)%cv, &
-                                              bc_in(bc_idx)%pv)
-        !
-      case (bc_sub_inflow)
-        !
-        ! Subsonic inflow boundary condition
-        !
-        if (any(sub_inflow_method == [2,3,4])) then
-          call get_bc_sub_inflow_solution(faceusp(nf)%v(:,:,1), &
-                                          faceusp(nf)%v(:,:,2), &
-                                          bc_in(bc_idx)%cv, &
-                                          bc_in(bc_idx)%pv)
-        else
-          call get_bc_sub_inflow_newton(faceusp(nf)%v(:,:,1), &
+      !
+    else if ( bface(1,nf) == bc_sub_inflow ) then
+      !
+      ! Subsonic inflow boundary condition
+      !
+      if (any(sub_inflow_method == [2,3,4])) then
+        call get_bc_sub_inflow_solution(faceusp(nf)%v(:,:,1), &
                                         faceusp(nf)%v(:,:,2), &
-                                        geofa(nf)%v(:,:), &
-                                        bc_in(bc_idx)%pv, &
-                                        newton_failures, &
-                                        nf)
-        end if
-        !
-      case (bc_sub_outflow)
-        !
-        ! Subsonic outflow boundary condition
-        !
-        call get_bc_sub_outflow_solution(faceusp(nf)%v(:,:,1), &
-                                         faceusp(nf)%v(:,:,2), &
-                                         geofa(nf)%v(:,:), &
-                                         bc_in(bc_idx)%pv)
-        !
-      case (bc_sup_inflow)
-        !
-        ! Supersonic inflow boundary condition
-        !
-        call get_bc_sup_inflow_solution(faceusp(nf)%v(:,:,2), &
-                                        bc_in(bc_idx)%cv)
-        !
-      case (bc_sup_outflow)
-        !
-        ! Supersonic outflow boundary condition
-        !
-        call get_bc_sup_outflow_solution(faceusp(nf)%v(:,:,1), &
-                                         faceusp(nf)%v(:,:,2))
-        !
-      case (bc_slip_wall,bc_symmetry)
-        !
-        ! Slip wall / symmetry boundary condition
-        !
-        call get_bc_slip_wall_solution(faceusp(nf)%v(:,:,1), &
+                                        bc_in(bc_idx)%cv, &
+                                        bc_in(bc_idx)%pv)
+      else
+        call get_bc_sub_inflow_newton(faceusp(nf)%v(:,:,1), &
+                                      faceusp(nf)%v(:,:,2), &
+                                      geofa(nf)%v(:,:), &
+                                      bc_in(bc_idx)%pv, &
+                                      newton_failures, &
+                                      nf)
+      end if
+      !
+    else if ( bface(1,nf) == bc_sub_outflow ) then
+      !
+      ! Subsonic outflow boundary condition
+      !
+      call get_bc_sub_outflow_solution(faceusp(nf)%v(:,:,1), &
                                        faceusp(nf)%v(:,:,2), &
-                                       geofa(nf)%v(:,:))
-        !
-      case (bc_adiabatic_wall)
-        !
-        ! No-slip adiabatic wall
-        !
-        call get_bc_adiabatic_wall_solution(faceusp(nf)%v(:,:,1), &
-                                            faceusp(nf)%v(:,:,2), &
-                                            bc_in(bc_idx)%pv)
-        !
-      case (bc_isothermal_wall)
-        !
-        ! No-slip isothermal wall
-        !
-        if (use_old_iso_wall) then
-          call get_bc_iso_wall_solution_old(faceusp(nf)%v(:,:,1), &
-                                            faceusp(nf)%v(:,:,2), &
-                                            bc_in(bc_idx)%wall_temperature, &
-                                            geofa(nf)%v(:,:))
-        else
-          call get_bc_isothermal_wall_solution(faceusp(nf)%v(:,:,1), &
-                                               faceusp(nf)%v(:,:,2), &
-                                               bc_in(bc_idx)%wall_temperature, &
-                                               bc_in(bc_idx)%pv)
-        end if
-        !
-      case (bc_periodic)
-        !
-        ! Periodic boundary condition
-        !
-        pf = bface(5,nf) ! index of connecting periodic boundary face
-        !
-        call get_bc_periodic_solution(faceusp(pf)%v(:,:,1), &
-                                      faceusp(nf)%v(:,:,2))
-        !
-      case (bc_mms_dirichlet)
-        !
-        ! Dirichlet boundary condition for MMS
-        !
-        call get_bc_mms_dirichlet_solution(faceusp(nf)%v(:,:,1), &
-                                           faceusp(nf)%v(:,:,2), &
-                                           facexyz(nf)%v(:,:), &
-                                           geofa(nf)%v(:,:))
-        !
-      case (bc_custom_profile)
-        !
-        ! Set a custom profile at BC
-        !
-        call get_bc_custom_profile(faceusp(nf)%v(:,:,2), nf)
-        !
-      case (bc_cpu_bnd)
-        !
-        ! We dont need to do anything here for communication boundaries
-        !
-      case default
-        !
-        ! This shouldn't be here and is an unknown boundary condition
-        !
-        write (iout,1) bface(1,nf)
-        call stop_gfr(abort,pname,__LINE__,__FILE__)
-        !
-    end select
+                                       geofa(nf)%v(:,:), &
+                                       bc_in(bc_idx)%pv)
+      !
+    else if ( bface(1,nf) == bc_sup_inflow ) then
+      !
+      ! Supersonic inflow boundary condition
+      !
+      call get_bc_sup_inflow_solution(faceusp(nf)%v(:,:,2), &
+                                      bc_in(bc_idx)%cv)
+      !
+    else if ( bface(1,nf) == bc_sup_outflow ) then
+      !
+      ! Supersonic outflow boundary condition
+      !
+      call get_bc_sup_outflow_solution(faceusp(nf)%v(:,:,1), &
+                                       faceusp(nf)%v(:,:,2))
+      !
+    else if ( bface(1,nf) == bc_slip_wall &
+         .or. bface(1,nf) == bc_symmetry ) then
+      !
+      ! Slip wall / symmetry boundary condition
+      !
+      call get_bc_slip_wall_solution(faceusp(nf)%v(:,:,1), &
+                                     faceusp(nf)%v(:,:,2), &
+                                     geofa(nf)%v(:,:))
+      !
+    else if ( bface(1,nf) == bc_adiabatic_wall ) then
+      !
+      ! No-slip adiabatic wall
+      !
+      call get_bc_adiabatic_wall_solution(faceusp(nf)%v(:,:,1), &
+                                          faceusp(nf)%v(:,:,2), &
+                                          bc_in(bc_idx)%pv)
+      !
+    else if ( bface(1,nf) == bc_isothermal_wall ) then
+      !
+      ! No-slip isothermal wall
+      !
+      if (use_old_iso_wall) then
+        call get_bc_iso_wall_solution_old(faceusp(nf)%v(:,:,1), &
+                                          faceusp(nf)%v(:,:,2), &
+                                          bc_in(bc_idx)%wall_temperature, &
+                                          geofa(nf)%v(:,:))
+      else
+        call get_bc_isothermal_wall_solution(faceusp(nf)%v(:,:,1), &
+                                             faceusp(nf)%v(:,:,2), &
+                                             bc_in(bc_idx)%wall_temperature, &
+                                             bc_in(bc_idx)%pv)
+      end if
+      !
+    else if ( any( bface(1,nf) == bc_periodic_list ) ) then
+      !
+      ! Periodic boundary condition
+      !
+      pf = bface(5,nf) ! index of connecting periodic boundary face
+      !
+      call get_bc_periodic_solution(faceusp(pf)%v(:,:,1), &
+                                    faceusp(nf)%v(:,:,2))
+      !
+    else if ( bface(1,nf) == bc_mms_dirichlet ) then
+      !
+      ! Dirichlet boundary condition for MMS
+      !
+      call get_bc_mms_dirichlet_solution(faceusp(nf)%v(:,:,1), &
+                                         faceusp(nf)%v(:,:,2), &
+                                         facexyz(nf)%v(:,:), &
+                                         geofa(nf)%v(:,:))
+      !
+    else if ( bface(1,nf) == bc_custom_profile ) then
+      !
+      ! Set a custom profile at BC
+      !
+      call get_bc_custom_profile(faceusp(nf)%v(:,:,2), nf)
+      !
+    else if ( bface(1,nf) == bc_cpu_bnd ) then
+      !
+      ! We dont need to do anything here for communication boundaries
+      !
+    else
+      !
+      ! This shouldn't be here and is an unknown boundary condition
+      !
+      write (iout,1) bface(1,nf)
+      call stop_gfr(abort,pname,__LINE__,__FILE__)
+      !
+    end if
     !
   end do
   !
@@ -367,7 +366,7 @@ continue
         !
       end if
       !
-    else if (bface(1,nf) == bc_periodic) then
+    else if ( any( bface(1,nf) == bc_periodic_list ) ) then
       !
       ! Periodic boundary condition
       !

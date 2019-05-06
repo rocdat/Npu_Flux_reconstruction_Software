@@ -92,6 +92,9 @@ $(OBJDIR)/cgnstypes_mod.o : cgnstypes_mod.f90 \
 $(OBJDIR)/math_interpolation.o : math_interpolation.f90 \
                   $(OBJDIR)/kind_types.o
 
+$(OBJDIR)/kdtree2.o : kdtree2.f90 \
+                  $(OBJDIR)/kind_types.o
+
 $(OBJDIR)/channel_mod.o : channel_mod.f90 \
                 $(OBJDIR)/kind_types.o \
                 $(OBJDIR)/eqn_idx_mod.o \
@@ -367,6 +370,7 @@ $(OBJDIR)/parallel.o : parallel.f90 \
              $(OBJDIR)/connectivity.o \
              $(OBJDIR)/gmsh_mod.o \
              $(OBJDIR)/cgns_mod.o \
+             $(OBJDIR)/kdtree2.o \
              $(FUNDIR)/cell_solpts.f90 \
              $(FUNDIR)/last.f90 \
              $(SRCDIR)/mpi_defs.h

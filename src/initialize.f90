@@ -393,6 +393,9 @@ continue
   !
   call get_face_and_edge_point_coordinates
   !
+  ! Initialize the periodic BC. Find the connected bnd faces.
+  ! call init_periodic_faces
+  !
   ! Now facexyz is obtained. Interpolate the input profile to the custom
   ! profile BC boundary.
   call init_custome_profile_bc
@@ -1720,8 +1723,16 @@ continue
   bc_in(0)%pv = pv(:) ! Using F2003 auto-reallocation
   bc_in(0)%cv = cv(:) ! Using F2003 auto-reallocation
   !
-  ! Set the other boundary conditions
+  ! Allocate memeory for the periodic faces index array
+  ! allocate(pdc_faces_idx(size(bface,dim=1),2),source=-1,stat=ierr, &
+  !   errmsg=error_message)
+  ! call alloc_error(pname,"pdc_faces_idx",1,__LINE__,__FILE__,ierr, &
+  !   error_message)
   !
+  ! Init the index of the periodic face group
+  ! ipdc = 1
+  !
+  ! Set the other boundary conditions
   nbc_loop: do i = 1,nbc
     !
     n = bc_list(i)
@@ -1740,7 +1751,20 @@ continue
       end if
       !
       bc_in(i)%bc_type = bc_string_to_integer(bc_input(n)%bc_type_string)
+      !
+      ! Check bc_type if it is unknown.
+      if (bc_in(i)%bc_type == bc_unknown) then
+        !
+        write(error_message,8) i
+        call stop_gfr(stop_mpi,pname,__LINE__,__FILE__, error_message)
+        !
+      end if
+      !
       bc_in(i)%bc_name = bc_input(n)%name
+    else
+      !
+        call stop_gfr(stop_mpi,pname,__LINE__,__FILE__, &
+          "Non-GMSH format is currently not ready!")
       !
     end if
     !
@@ -1915,12 +1939,25 @@ continue
           !
           alpha = zero
           beta = zero
+          !
           if (nr >= 2) then
+            !
             alpha = atan2(bc_in(i)%pv(nmy),bc_in(i)%pv(nmx))
+            !
             if (nr == 3) then
-              beta = asin(bc_in(i)%pv(nmz)/norm2(bc_in(i)%pv(nmb:nme)))
+              !
+              beta = norm2(bc_in(i)%pv(nmb:nme))
+              ! Check if the velocity magnitude is zero.
+              if ( beta < eps12 ) then
+                beta = zero
+              else
+                beta = asin(bc_in(i)%pv(nmz)/beta)
+              end if
+              !
             end if
+            !
           end if
+          !
           alpha = alpha * radians2degrees
           beta = beta * radians2degrees
           !
@@ -1939,15 +1976,27 @@ continue
     !
     ! Update bface(1,nf) and bface(6,nf) according to bc_input
     ii = 0
+    ! pdc_nf = 0
     bface_loop: do nf = 1,size(bface,dim=2)
       !
-      if (any(bface(1,nf) == bc_comm) .or. bface(5,nf) == 0) cycle bface_loop
+      ! This bnd face is at the MPI communication interface.
+      ! This bnd face does not need bface(6,nf) which specifies the index of
+      ! pv_in to provide the reference boundary flow condition.
+      ! However, here uses bface(1,nf) which may be inaccurate and will be
+      ! overidden later.
+      ! FIXME: distable this check. This may be wrong for parallel running.
+      ! if ( any(bface(1,nf) == bc_cpu_bnd) ) cycle bface_loop
       !
-      bcnam = trim(adjustl( uppercase( bc_in(bface(5,nf))%bc_name ) ))
-      bcinp = trim(adjustl( uppercase( bc_input(n)%name      ) ))
+      ! n is the index of the bc_input which is from our input file.
+      ! bface(11,nf) stores the index of BC spficied in the GMSH file.
+      ! if they match, we override bface(1,nf) and bface(6,nf).
+      ! In this way, counting the periodic BC faces will occur twice.
       !
-      if (bcnam == bcinp) then
+      ! n is fixed for this iteration in the nbc_loop. So we are looping all
+      ! bnd faces for this BC.
+      if ( n == bface(11,nf) ) then
         !
+        ! This is counting the BC faces.
         ii = ii + 1
         !
         ! Save the index for this boundary condition
@@ -1956,10 +2005,14 @@ continue
         bface(6,nf) = i
         !
         ! Force the boundary condition to that specified in the input file
-        ! if the value of set_bc_value is not equal to bc_unknown
-        if (bc_in(i)%bc_type /= bc_unknown) then
-          bface(1,nf) = bc_in(i)%bc_type
-        end if
+        bface(1,nf) = bc_in(i)%bc_type
+        !
+        ! if ( bface(1,nf) == bc_periodic ) then
+        !   !
+        !   ! pdc_nf = pdc_nf + 1
+        !   pdc_faces_idx(ii,ipdc) = nf
+        !   !
+        ! end if
         !
       end if
       !
@@ -1972,7 +2025,41 @@ continue
       write (iout,6) ii
     end if
     !
+    ! if ( pdc_faces_idx(1,ipdc) > 0 ) then
+    !   !
+    !   ! pdc_faces_idx(1,ipdc) is modified. So this group of bnd faces are
+    !   ! periodic faces.
+    !   ! Increate ipdc to next value.
+    !   ipdc = ipdc + 1
+    !   !
+    ! end if
+    !
   end do nbc_loop
+  !
+  ! Collect ipdc as a flag
+  ! call mpi_allreduce(MPI_IN_PLACE,ipdc,1_int_mpi,mpi_inttyp,MPI_SUM, &
+  !   MPI_COMM_WORLD,mpierr)
+  ! ipdc = ipdc - ncpu
+  ! !
+  ! if ( ipdc > 0 ) then
+  !   !
+  !   if ( modulo(ipdc,2) == 1 ) then
+  !     ! Number of periodic face group is odd. Error.
+  !     call stop_gfr(stop_mpi,pname,__LINE__,__FILE__, &
+  !       "Periodic BCs must be a pair")
+  !     !
+  !   else if ( modulo(ipdc,2) == 0 ) then
+  !     !
+  !     ! Number of periodic face group is even. Correct.
+  !     ! By using modulo, we allow multiple pairs of periodic face groups.
+  !     ! Now, collect pdc_faces_idx
+  !     !
+  !   end if
+  !   !
+  ! end if
+  ! !
+  ! ! Shrink the size of pdc_faces_idx
+  ! call reallocate(pdc_faces_idx,,2)
   !
   if (ncpu > 1) then
     if (mypnum == glb_root) flush (iout)
@@ -2003,6 +2090,7 @@ continue
   6 format (4x,"Number of boundary faces for this BC = ",i0)
   7 format ("GMSH file provides ",i0," BCs while the input file gives ",i0,&
             " BCs")
+  8 format ("bc_in(",i0,")%bc_type is bc_unknown!")
   !
 end subroutine create_bc_in
 !
@@ -2384,6 +2472,70 @@ continue
   call debug_timer(leaving_procedure,pname)
   !
 end subroutine init_custome_profile_bc
+!
+!###############################################################################
+!
+! subroutine init_periodic_faces
+!   !
+!   ! Use Statements
+!   use geovar, only : nr,nfbnd
+!   use geovar, only : bface,face
+!   use eqn_idx, only : nq
+!   ! use ovar, only : bc_in,cpbc_prof_mat,cpbc_prof_input
+!   ! use ovar, only : cpbc_gufp,cpbc_idx_map
+!   ! use order_mod, only : geom_solpts,maxFP
+!   ! use flowvar, only : facexyz
+!   !
+!   ! Formal Arguments
+!   !
+!   ! Local Varaibles
+!   integer :: ierr
+!   ! integer :: nbc,ibc,i,l,nf,kf,nfp,nfp_max
+!   ! integer :: face_geom,face_order
+!   ! integer :: cpbc_idx
+!   ! real(wp) :: y_fp
+!   !
+!   ! Local Array
+!   real(wp), dimension(1:nq) :: pv
+!   !
+!   ! Local Parameter
+!   character(len=*), parameter :: pname = "init_periodic_faces"
+!   !
+! continue
+!   !
+!   call debug_timer(entering_procedure,pname)
+!   !
+!   ! First check if there are periodic BCs
+!   nbc = size(bc_in)-1
+!   periodic_bc_found = fals
+!   bc_in_loop : do ibc = 1,nbc
+!     !
+!     if ( bc_in(ibc)%bc_type == bc_periodic ) then
+!       ! Periodic BC is found
+!       periodic_bc_found = true
+!       exit bc_in_loop
+!       !
+!     end if
+!     !
+!   end do bc_in_loop
+!   !
+!   if ( .not. periodic_bc_found ) then
+!     !
+!     ! No periodic BC in this simulation
+!     return
+!     !
+!   end if
+!   !
+!   ! Now the periodic BC is found. So we find the connected faces for the
+!   ! periodic BC.
+!   do nf = 1,size(bface,dim=2)
+!     !
+!     !
+!   end do
+!   !
+!   call debug_timer(leaving_procedure,pname)
+!   !
+! end subroutine init_periodic_faces
 !
 !###############################################################################
 !

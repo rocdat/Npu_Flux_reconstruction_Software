@@ -79,6 +79,7 @@ OBJS := $(OBJDIR)/kind_types.o \
         $(OBJDIR)/gmsh_mod.o \
         $(OBJDIR)/cgnstypes_mod.o \
         $(OBJDIR)/math_interpolation.o \
+        $(OBJDIR)/kdtree2.o \
         $(OBJDIR)/cgns_mod.o \
         $(OBJDIR)/io.o \
         $(OBJDIR)/metrics.o \
@@ -110,7 +111,6 @@ OBJS := $(OBJDIR)/kind_types.o \
         $(OBJDIR)/pbs_mod.o \
         $(OBJDIR)/cpu_info_mod.o \
         $(OBJDIR)/averaging_mod.o
-        # $(OBJDIR)/plot3d_mod.o \
 
 
 HighlightName := | /bin/grep -hi --color '[^ ]\+\.\(f[0-9]*\|c\)\>'

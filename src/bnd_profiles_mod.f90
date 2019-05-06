@@ -555,7 +555,7 @@ continue
   allocate ( msk(1:nfbnd) , source=fals , stat=ierr , errmsg=error_message )
   call alloc_error(pname,"msk",1,__LINE__,__FILE__,ierr,error_message)
   !
-  msk(:) = (bface(1,:)/=bc_periodic .and. bface(1,:)/=bc_cpu_bnd)
+  msk(:) = ( all( bface(1,:)/=bc_periodic_list ) .and. bface(1,:)/=bc_cpu_bnd)
   !
   ! Count the number of non-communication boundary faces
   !

@@ -1353,33 +1353,7 @@ continue
   call debug_timer(entering_procedure,pname)
   !
   call memory_pause("reading input file","reading grid file")
-  if (postproc_debug_grid) then
-    ! Drop the support for postproc_debug_grid format. The design of BC is bad.
-    ! Forcus on GMSH format. 2019-04-19, 13:43:54. Jingchang Shi
-    call stop_gfr(stop_mpi,pname,__LINE__,__FILE__, &
-      'postproc_debug_grid grid format is not supported for now!')
-    call create_postproc_debug_grid
-  else if (itestcase == Taylor_Green_Vortex .and. &
-           grid_format == Internally_Generated_Grid) then
-    ! Drop the support for TaylorGreen format. The design of BC is bad.
-    ! Forcus on GMSH format. 2019-04-19, 13:43:54. Jingchang Shi
-    call stop_gfr(stop_mpi,pname,__LINE__,__FILE__, &
-      'TaylorGreen grid format is not supported for now!')
-    call create_TaylorGreenVortex_grid
-  else if (any(abs(itestcase) == Transport_Problems) .and. &
-           grid_format == Internally_Generated_Grid) then
-    ! Drop the support for IsentropicVortex format. The design of BC is bad.
-    ! Forcus on GMSH format. 2019-04-19, 13:43:54. Jingchang Shi
-    call stop_gfr(stop_mpi,pname,__LINE__,__FILE__, &
-      'IsentropicVortex grid format is not supported for now!')
-    call create_IsentropicVortex_grid
-  else if (grid_format == Gambit_Neutral) then
-    ! Drop the support for Gambit format. The design of BC is bad. Forcus on
-    ! GMSH format. 2019-04-19, 13:43:54. Jingchang Shi
-    call stop_gfr(stop_mpi,pname,__LINE__,__FILE__, &
-      'Gambit grid format is not supported for now!')
-    call read_gambit_neutral_gridfile
-  else if (grid_format == Gmsh_Format) then
+  if (grid_format == Gmsh_Format) then
     call read_gmsh_gridfile( gridfile )
   else if (grid_format == CGNS_Format) then
     ! Drop the support for PLOT3D format. The design of BC is bad. Forcus on
@@ -1440,1732 +1414,6 @@ continue
   call debug_timer(leaving_procedure,pname)
   !
 end subroutine read_grid_file
-!
-!###############################################################################
-!
-subroutine read_gambit_neutral_gridfile()
-  !
-  ! Routine to read in a grid file using Gambit Neutral formatting.
-  !
-  use geovar, only : nr,nbfai,nnode,ncell,nfbnd,xyz_nodes
-  use geovar, only : bface,nodes_of_cell_ptr,nodes_of_cell
-  use geovar, only : cell_geom,cell_order
-  use ovar,   only : loc_solution_pts,loc_flux_pts
-  use ovar,   only : grid_scaling_factor
-  use order_mod, only : n_order
-  !
-  !.. Local Scalars ..
-  integer :: i,j,k,n,nf,n1,n2,i1,nc,pc,pf
-  integer :: icell,inode,iside,ierr,itype
-  integer :: ngrps,nbsets,ndfvl,nentry,nvalues
-  integer :: iogrd
-  !
-  character(len=80) :: text
-  !
-  !.. Local Allocatable Arrays ..
-  logical(lk), allocatable, dimension(:) :: bc_done
-  !
-  !.. Local Parameters ..
-  character(len=*), parameter :: pname = "read_gambit_neutral_gridfile"
-  integer, dimension(1:7), parameter :: convert_geom = [Geom_Edge,Geom_Quad, &
-                                                        Geom_Tria,Geom_Hexa, &
-                                                        Geom_Pris,Geom_Tetr, &
-                                                        Geom_Pyra]
-  !
-continue
-  !
-  call debug_timer(entering_procedure,pname)
-  !
-  ! Open the grid file
-  !
-  open (newunit=iogrd,file=gridfile,status="old",action="read", &
-                      position="rewind",iostat=ierr,iomsg=error_message)
-  call io_error(pname,trim(adjustl(gridfile)),1,__LINE__,__FILE__, &
-                ierr,error_message)
-  !
-  ! Skip the file header
-  !
-  do i = 1,6
-    read (iogrd,1) text
-  end do
-  !
-  ! Read the grid size and dimensions
-  !
-  read (iogrd,*) nnode,ncell,ngrps,nbsets,nr,ndfvl
-  !
-  allocate ( nodes_of_cell_ptr(1:ncell+1) , source=0 , &
-             stat=ierr , errmsg=error_message )
-  call alloc_error(pname,"nodes_of_cell_ptr",1,__LINE__,__FILE__,ierr, &
-                   error_message)
-  !
-  allocate ( cell_geom(1:ncell) , source=0 , &
-             stat=ierr , errmsg=error_message )
-  call alloc_error(pname,"cell_geom",1,__LINE__,__FILE__,ierr,error_message)
-  !
-  allocate ( cell_order(1:ncell) , source=n_order , &
-             stat=ierr , errmsg=error_message )
-  call alloc_error(pname,"cell_order",1,__LINE__,__FILE__,ierr,error_message)
-  !
-  ! Skip some lines
-  !
-  read (iogrd,1) text
-  read (iogrd,1) text
-  !
-  ! Skip over the node coordinates
-  !
-  do i = 1,nnode
-    read (iogrd,1) text
-  end do
-  !
-  ! Skip some more lines
-  !
-  read (iogrd,1) text
-  read (iogrd,1) text
-  !
-  ! Read through the cell connectivities to
-  ! find the number of nodes defining each cell
-  !
-  do i = 1,ncell
-    read (iogrd,*) n,cell_geom(i),nodes_of_cell_ptr(n+1)
-  end do
-  !
-  ! Convert the cell geometry values from the Gambit neutral grid file
-  !
-  !   If 'igeom' is the value given in the grid file
-  !       igeom = 1  -> edge
-  !       igeom = 2  -> quadrilateral
-  !       igeom = 3  -> triangle
-  !       igeom = 4  -> brick/hexahedron
-  !       igeom = 5  -> wedge/prism
-  !       igeom = 6  -> tetrahedron
-  !       igeom = 7  -> pyramid
-  !
-  !   We need them stored as
-  !       cell_geom(i) = 1  -> edge
-  !       cell_geom(i) = 2  -> quadrilateral
-  !       cell_geom(i) = 3  -> triangle
-  !       cell_geom(i) = 4  -> tetrahedron
-  !       cell_geom(i) = 5  -> pyramid
-  !       cell_geom(i) = 6  -> wedge/prism
-  !       cell_geom(i) = 8  -> brick/hexahedron
-  !
-  do i = 1,ncell
-    cell_geom(i) = convert_geom( cell_geom(i) )
-  end do
-  !
-  ! Reshuffle nodes_of_cell_ptr
-  !
-  do i = 2,size(nodes_of_cell_ptr)
-    nodes_of_cell_ptr(i) = nodes_of_cell_ptr(i) + nodes_of_cell_ptr(i-1)
-  end do
-  !
-  ! Skip the group sections
-  !
-  read (iogrd,1) text
-  do i = 1,ngrps
-    read (iogrd,1) text
-    do
-      read (iogrd,1) text
-      if (trim(adjustl(text)) == "ENDOFSECTION") exit
-    end do
-  end do
-  !
-  ! Cycle through the different boundary conditions
-  ! to find the total number of boundary faces
-  !
-  nfbnd = 0
-  do i = 1,nbsets
-    read (iogrd,1) text
-    read (iogrd,*) text,itype,nentry,nvalues
-    do j = 1,nentry
-      read (iogrd,1) text
-    end do
-    read (iogrd,1) text
-    nfbnd = nfbnd + nentry
-  end do
-  !
-  ! Now go back to the beginning and read in the grid data
-  !
-  rewind (iogrd)
-  !
-  ! Allocate the arrays needed to store this data
-  !
-  allocate ( xyz_nodes(1:nr,1:nnode) , source=zero , &
-             stat=ierr , errmsg=error_message )
-  call alloc_error(pname,"xyz_nodes",1,__LINE__,__FILE__,ierr,error_message)
-  allocate ( nodes_of_cell(1:last(nodes_of_cell_ptr)) , source=0 , &
-             stat=ierr , errmsg=error_message )
-  call alloc_error(pname,"nodes_of_cell",1,__LINE__,__FILE__,ierr,error_message)
-  allocate ( bface(1:nbfai,1:nfbnd) , source=0 , &
-             stat=ierr , errmsg=error_message )
-  call alloc_error(pname,"bface",1,__LINE__,__FILE__,ierr,error_message)
-  allocate ( bc_done(1:nfbnd) , source=true , &
-             stat=ierr , errmsg=error_message )
-  call alloc_error(pname,"bc_done",1,__LINE__,__FILE__,ierr,error_message)
-  !
-  ! Skip the header and other data that is already known
-  !
-  do i = 1,9
-    read (iogrd,1) text
-  end do
-  !
-  ! Read in the nodal coordinates
-  !
-  do i = 1,nnode
-    read (iogrd,*) n,(xyz_nodes(k,n),k=1,nr)
-  end do
-  !
-  ! Apply the grid scaling factor to the coordinates of the grid nodes
-  !
-  do n = 1,size(xyz_nodes,dim=2)
-    do i = 1,size(xyz_nodes,dim=1)
-      xyz_nodes(i,n) = grid_scaling_factor*xyz_nodes(i,n)
-    end do
-  end do
-  !
-  ! Skip a couple lines
-  !
-  read (iogrd,1) text
-  read (iogrd,1) text
-  !
-  ! Read the nodes defining each cell into nodes_of_cell
-  !
-  do i = 1,ncell
-    read (iogrd,*) n,itype,j,(nodes_of_cell(k),k=nodes_of_cell_ptr(n)+1, &
-                                                 nodes_of_cell_ptr(n+1))
-  end do
-  !
-  ! Skip the group sections
-  !
-  read (iogrd,1) text
-  do i = 1,ngrps
-    read (iogrd,1) text
-    do
-      read (iogrd,1) text
-      if (trim(adjustl(text)) == "ENDOFSECTION") exit
-    end do
-  end do
-  !
-  ! Read in all the boundary condition sets
-  !
-  n = 0
-  do i = 1,nbsets
-    !
-    read (iogrd,1) text
-    read (iogrd,*) text,itype,nentry,nvalues
-    !
-    ! Convert the BC string to itts respective integer value
-    !
-    itype = bc_string_to_integer(text)
-    !
-    ! Mark these boundaries as not finished if this is a periodic boundary
-    !
-    if (itype == bc_periodic) then
-      bc_done(n+1:n+nentry) = fals
-    end if
-    !
-    do j = 1,nentry
-      n = n + 1
-      bface(1,n) = itype
-      read (iogrd,*) (bface(k,n),k=2,4),(bface(4+k,n),k=1,nvalues)
-      if (itype /= bc_periodic) then
-        bface(5,n) = i ! boundary condition group for this boundary face
-      end if
-    end do
-    !
-    read (iogrd,1) text
-    !
-  end do
-  !
-  close (iogrd,iostat=ierr,iomsg=error_message)
-  call io_error(pname,trim(adjustl(gridfile)),2,__LINE__,__FILE__, &
-                ierr,error_message)
-  !
-  ! Convert the cell geometry values from the Gambit neutral grid file
-  !
-  do nf = 1,nfbnd
-    bface(3,nf) = convert_geom( bface(3,nf) )
-  end do
-  !
-  ! Save the index for the ghost cell on the face in bface(10,:)
-  !
-  bface(10,:) = ncell + intseq(1,nfbnd)
-  !
-  ! Lets do a quick modification to the periodic boundary conditions
-  ! For each periodic boundary condition, we will find the opposite
-  ! connecting periodic boundary condition and link the two together
-  !
-  do nf = 1,nfbnd
-    !
-    ! Skip the boundary faces that are not periodic or have been completed
-    !
-    if (bc_done(nf)) cycle
-    !
-    ! Cells that are included in this periodic bc
-    !
-    nc = bface(2,nf)
-    pc = bface(5,nf)
-    !
-    ! Find the other periodic boundary face with these two cells
-    !
-    search_loop: do n = 1,nfbnd
-      if (bc_done(n)) cycle
-      if (bface(2,n)==pc .and. bface(5,n)==nc) then
-        pf = n
-        exit search_loop
-      end if
-    end do search_loop
-    !
-    ! Link the two boundary faces to each other
-    !
-    bface(5,nf) = pf          ! boundary face of connecting cell
-    bface(6,nf) = pc          ! connecting cell
-    bface(8,nf) = bface(3,pf) ! connecting cell geometry type
-    bface(9,nf) = bface(4,pf) ! face of connecting cell on boundary
-    !
-    bface(5,pf) = nf          ! boundary face of connecting cell
-    bface(6,pf) = nc          ! connecting cell
-    bface(8,pf) = bface(3,nf) ! connecting cell geometry type
-    bface(9,pf) = bface(4,nf) ! face of connecting cell on boundary
-    !
-    ! Mark these two periodic boundary faces as finished
-    !
-    bc_done(nf) = true
-    bc_done(pf) = true
-    !
-  end do
-  !
-  deallocate ( bc_done , stat=ierr , errmsg=error_message )
-  call alloc_error(pname,"bc_done",2,__LINE__,__FILE__,ierr,error_message)
-  !
-  ! Make sure that Lobatto nodes are requested if the grid contains triangle
-  ! elements since Gauss nodes is not currently set up for triangles.
-  !
-  if (any(cell_geom == Geom_Tria)) then
-    write (*,3)
-    call stop_gfr(stop_mpi,pname,__LINE__,__FILE__)
-  end if
-  !
-  if (loc_solution_pts /= Legendre_Gauss_Lobatto .or. &
-      loc_flux_pts /= Legendre_Gauss_Lobatto) then
-    if (any(cell_geom == Geom_Tria)) then
-      write (*,2)
-      call stop_gfr(stop_mpi,pname,__LINE__,__FILE__)
-    end if
-  end if
-  !
-  call debug_timer(leaving_procedure,pname)
-  !
-  ! Format statements
-  !
-  1 format (a)
-  2 format (/," Quadrature points besides Gauss-Lobatto nodes are not",/, &
-              " currently supported for a grid containing triangle cells.",//)
-  3 format (///," Triangles are temporarily disabled due to significant",/, &
-                " changes in the quadrilateral part of the code. These ",/, &
-                " changes have yet to be applied to triangles.",///)
-  !
-end subroutine read_gambit_neutral_gridfile
-!
-!###############################################################################
-!
-subroutine create_IsentropicVortex_grid()
-  !
-  !.. Use Statements ..
-  use order_mod, only : n_order
-  use ovar,      only : Lref,itestcase
-  use ovar,      only : VortexGrid_DOF,VortexGrid_Lref
-  use ovar,      only : VortexGrid_random_perturb
-  use ovar,      only : VortexGrid_perturb_percent
-  use geovar,    only : nr,nbfai,nnode,ncell,nfbnd,xyz_nodes
-  use geovar,    only : bface,nodes_of_cell_ptr,nodes_of_cell
-  use geovar,    only : cell_geom,cell_order
-  !
-  !.. Local Scalars ..
-  integer :: nc,np,ierr,i,j,l,n
-  integer :: nf_min,nf_max
-  real(r4) :: x,y,dl
-  real(r4) :: rbas,radj,rval
-  !
-  !.. Local Allocatable Arrays ..
-  real(r4), allocatable :: perturb(:,:)
-  !
-  !.. Local Parameters ..
-  character(len=*), parameter :: pname = "create_IsentropicVortex_grid"
- !logical(lk), parameter :: test_random_bc = true
-  logical(lk), parameter :: test_random_bc = fals
-  !
-continue
-  !
-  call debug_timer(entering_procedure,pname)
-  !
-  ! Reset the grid format input parameter to identify
-  ! the grid as internally generated
-  !
-  grid_format = Internally_Generated_Grid
-  !
-  ! If we are generating the grid on the fly, make the reference length 1
-  !
-  Lref = one
-  !
-  ! The isentropic Euler vortex problem is always 2D
-  !
-  nr = 2
-  !
-  ! Estimate the number of cells required to get the requested DOF
-  !
-  nc = nint( real(VortexGrid_DOF,kind=wp) / real(n_order+1,kind=wp) )
-  !
-  np = nc + 1 ! number of grid nodes in each direction
-  !
-  ncell = nc*nc ! total number of grid cells
-  nnode = np*np ! total number of grid nodes
-  nfbnd = 4*nc  ! total number of boundary faces
-  !
-  ! Allocate all the arrays needed to define the grid
-  !
-  allocate ( xyz_nodes(1:nr,1:nnode) , source=zero , &
-             stat=ierr , errmsg=error_message )
-  call alloc_error(pname,"xyz_nodes",1,__LINE__,__FILE__,ierr,error_message)
-  !
-  allocate ( nodes_of_cell_ptr(1:ncell+1) , source=0 , &
-             stat=ierr , errmsg=error_message )
-  call alloc_error(pname,"nodes_of_cell_ptr",1,__LINE__,__FILE__,ierr, &
-                   error_message)
-  !
-  allocate ( nodes_of_cell(1:geom_nodes(Geom_Quad)*ncell) , source=0 , &
-             stat=ierr , errmsg=error_message )
-  call alloc_error(pname,"nodes_of_cell",1,__LINE__,__FILE__,ierr,error_message)
-  !
-  allocate ( bface(1:nbfai,1:nfbnd) , source=0 , &
-             stat=ierr , errmsg=error_message )
-  call alloc_error(pname,"bface",1,__LINE__,__FILE__,ierr,error_message)
-  !
-  allocate ( cell_geom(1:ncell) , source=Geom_Quad , &
-             stat=ierr , errmsg=error_message )
-  call alloc_error(pname,"cell_geom",1,__LINE__,__FILE__,ierr,error_message)
-  !
-  allocate ( cell_order(1:ncell) , source=n_order , &
-             stat=ierr , errmsg=error_message )
-  call alloc_error(pname,"cell_order",1,__LINE__,__FILE__,ierr,error_message)
-  !
-  allocate ( perturb(1:nr,1:nnode) , source=real(0,kind=r4) , &
-             stat=ierr , errmsg=error_message )
-  call alloc_error(pname,"perturb",1,__LINE__,__FILE__,ierr,error_message)
-  !
-  ! #######
-  ! #######
-  ! ## 1 ##
-  ! #######
-  ! #######
-  !
-  ! Create the nodes_of_cell_ptr array
-  !
-  nodes_of_cell_ptr(1) = 0
-  do n = 2,size(nodes_of_cell_ptr)
-    nodes_of_cell_ptr(n) = nodes_of_cell_ptr(n-1) + geom_nodes(Geom_Quad)
-  end do
-  !
-  ! Create the nodes_of_cell array
-  !
-  do j = 1,nc
-    do i = 1,nc
-      !
-      n = nodes_of_cell_ptr( map2dto1d(i,j,nc) )
-      !
-      nodes_of_cell(n+1) = map2dto1d(i  ,j  ,np)
-      nodes_of_cell(n+2) = map2dto1d(i+1,j  ,np)
-      nodes_of_cell(n+3) = map2dto1d(i+1,j+1,np)
-      nodes_of_cell(n+4) = map2dto1d(i  ,j+1,np)
-      !
-    end do
-  end do
-  !
-  ! #######
-  ! #######
-  ! ## 2 ##
-  ! #######
-  ! #######
-  !
-  ! Compute the cell length for a Cartesian/uniform grid
-  !
-  dl = real(1,kind=r4) / real(np-1,kind=r4)
-  !
-  ! Compute the random perturbations if the flag was set on input
-  !
-  if (VortexGrid_random_perturb) then
-    !
-    rbas = dl * real(abs(VortexGrid_perturb_percent),kind=r4) &
-              / real(100,kind=r4)
-    radj = rbas / real(2,kind=r4)
-    !
-    ! Randomly perturb the crap out of everything
-    !
-    do j = 2,np-1
-      do i = 2,np-1
-        !
-        n = map2dto1d(i,j,np)
-        !
-        do l = 1,nr
-          rval = random(rbas) - radj
-          perturb(l,n) = rval
-        end do
-        !
-      end do
-    end do
-    !
-    ! Have the root processor broadcast its perturbations to all the
-    ! other processors so that the perturbations will be consistent
-    ! on all processors.
-    !
-    call mpi_bcast(perturb,size(perturb,kind=int_mpi), &
-                   MPI_REAL,0_int_mpi,MPI_COMM_WORLD,mpierr)
-    !
-  end if
-  !
-  ! Create the grid node coordinates as a square from (0,0) to (1,1)
-  !
-  do j = 1,np
-    !
-    y = dl * real(j-1,kind=r4)
-    !
-    do i = 1,np
-      !
-      x = dl * real(i-1,kind=r4)
-      !
-      n = map2dto1d(i,j,np)
-      !
-      xyz_nodes(1,n) = real( x + perturb(1,n) , kind=wp )
-      xyz_nodes(2,n) = real( y + perturb(2,n) , kind=wp )
-      !
-    end do
-  end do
-  !
-  ! Deallocate perturb since it is no longer needed
-  !
-  deallocate ( perturb , stat=ierr , errmsg=error_message )
-  call alloc_error(pname,"perturb",2,__LINE__,__FILE__,ierr,error_message)
-  !
-  ! Scale the grid node coordinates to the square (-1,-1) to (1,1)
-  !
-  xyz_nodes = two*xyz_nodes - one
-  !
-  ! Scale the grid node coordinates to the square (-Lref,-Lref) to (+Lref,+Lref)
-  !
-  xyz_nodes = abs(VortexGrid_Lref) * xyz_nodes
-  !
-  ! #######
-  ! #######
-  ! ## 3 ##
-  ! #######
-  ! #######
-  !
-  ! Create the bface array
-  !
-  only_root_creates_bface: if (mypnum == 0) then
-    !
-    nf_max = 0
-    !
-    ! Loop through the 4 grid boundaries
-    ! NOTE: This corresponds to the grid boundaries in
-    !       the order [imin,imax,jmin,jmax]
-    !
-    nf_min = nf_max
-    !
-    do j = 1,nc
-      !
-      nf_min = nf_min + 1
-      nf_max = nf_min + nc
-      !
-      bface( 1,nf_min) = bc_periodic
-      bface( 2,nf_min) = map2dto1d(1 ,j,nc)
-      bface( 3,nf_min) = Geom_Quad
-      bface( 4,nf_min) = HostFace2D(1)
-      bface( 5,nf_min) = nf_max
-      bface( 6,nf_min) = map2dto1d(nc,j,nc)
-      bface( 8,nf_min) = Geom_Quad
-      bface( 9,nf_min) = HostFace2D(2)
-      bface(10,nf_min) = ncell + nf_min
-      !
-      bface( 1,nf_max) = bc_periodic
-      bface( 2,nf_max) = bface(6,nf_min)
-      bface( 3,nf_max) = bface(8,nf_min)
-      bface( 4,nf_max) = bface(9,nf_min)
-      bface( 5,nf_max) = nf_min
-      bface( 6,nf_max) = bface(2,nf_min)
-      bface( 8,nf_max) = bface(3,nf_min)
-      bface( 9,nf_max) = bface(4,nf_min)
-      bface(10,nf_max) = ncell + nf_max
-      !
-      ! Adjust boundary conditions for stationary vortex or
-      ! vortex propagation in only the vertical direction
-      !
-      if (any(itestcase == [-Shu_Vortex,-Vortex_Transport])) then
-        !
-        if (test_random_bc) then
-          l = size(bc_heirarchy)
-          l = max( 1 , min(l,random(l)) )
-          bface(1,nf_min) = bc_heirarchy(l)
-        else
-          bface(1,nf_min) = bc_characteristic
-        end if
-        bface(  5,nf_min) = 1
-        bface(6:9,nf_min) = 0
-        !
-        if (test_random_bc) then
-          l = size(bc_heirarchy)
-          l = max( 1 , min(l,random(l)) )
-          bface(1,nf_max) = bc_heirarchy(l)
-        else
-          bface(1,nf_max) = bc_characteristic
-        end if
-        bface(  5,nf_max) = 1
-        bface(6:9,nf_max) = 0
-        !
-      end if
-      !
-    end do
-    !
-    nf_min = nf_max
-    !
-    do i = 1,nc
-      !
-      nf_min = nf_min + 1
-      nf_max = nf_min + nc
-      !
-      bface( 1,nf_min) = bc_periodic
-      bface( 2,nf_min) = map2dto1d(i,1 ,nc)
-      bface( 3,nf_min) = Geom_Quad
-      bface( 4,nf_min) = HostFace2D(3)
-      bface( 5,nf_min) = nf_max
-      bface( 6,nf_min) = map2dto1d(i,nc,nc)
-      bface( 8,nf_min) = Geom_Quad
-      bface( 9,nf_min) = HostFace2D(4)
-      bface(10,nf_min) = ncell + nf_min
-      !
-      bface( 1,nf_max) = bc_periodic
-      bface( 2,nf_max) = bface(6,nf_min)
-      bface( 3,nf_max) = bface(8,nf_min)
-      bface( 4,nf_max) = bface(9,nf_min)
-      bface( 5,nf_max) = nf_min
-      bface( 6,nf_max) = bface(2,nf_min)
-      bface( 8,nf_max) = bface(3,nf_min)
-      bface( 9,nf_max) = bface(4,nf_min)
-      bface(10,nf_max) = ncell + nf_max
-      !
-      ! Adjust boundary conditions for stationary vortex
-      !
-      if (itestcase == -Shu_Vortex) then
-        !
-        if (test_random_bc) then
-          l = size(bc_heirarchy)
-          l = max( 1 , min(l,random(l)) )
-          bface(1,nf_min) = bc_heirarchy(l)
-        else
-          bface(1,nf_min) = bc_characteristic
-        end if
-        bface(  5,nf_min) = 1
-        bface(6:9,nf_min) = 0
-        !
-        if (test_random_bc) then
-          l = size(bc_heirarchy)
-          l = max( 1 , min(l,random(l)) )
-          bface(1,nf_max) = bc_heirarchy(l)
-        else
-          bface(1,nf_max) = bc_characteristic
-        end if
-        bface(  5,nf_max) = 1
-        bface(6:9,nf_max) = 0
-        !
-      end if
-      !
-    end do
-    !
-  end if only_root_creates_bface
-  !
-  if (ncpu > 1) then
-    call mpi_bcast(bface,size(bface,kind=int_mpi), &
-                   mpi_inttyp,0_int_mpi,MPI_COMM_WORLD,mpierr)
-  end if
-  !
-  call debug_timer(leaving_procedure,pname)
-  !
-  contains
-  !
-  pure function map2dto1d(i,j,n) result(return_value)
-    integer, intent(in) :: i,j,n
-    integer :: return_value
-    return_value = i + n*(j-1)
-  end function map2dto1d
-  !
-end subroutine create_IsentropicVortex_grid
-!
-!###############################################################################
-!
-subroutine create_TaylorGreenVortex_grid()
-  !
-  !.. Use Statements ..
-  use order_mod, only : n_order
-  use ovar,      only : VortexGrid_DOF,Lref
-  use ovar,      only : VortexGrid_random_perturb
-  use ovar,      only : VortexGrid_perturb_percent
-  use geovar,    only : nr,nbfai,nnode,ncell,nfbnd,xyz_nodes
-  use geovar,    only : bface,nodes_of_cell_ptr,nodes_of_cell
-  use geovar,    only : cell_geom,cell_order
-  !
-  !.. Local Scalars ..
-  integer :: nc,np,ierr,i,j,k,l,n
-  integer :: nf_min,nf_max
-  real(r4) :: x,y,z,dl
-  real(r4) :: rbas,radj,rval
-  !
-  !.. Local Allocatable Arrays ..
-  real(r4), allocatable :: perturb(:,:)
-  !
-  !.. Local Parameters ..
-  character(len=*), parameter :: pname = "create_TaylorGreenVortex_grid"
-  !
-continue
-  !
-  call debug_timer(entering_procedure,pname)
-  !
-  ! Reset the grid format input parameter to identify
-  ! the grid as internally generated
-  !
-  grid_format = Internally_Generated_Grid
-  !
-  ! If we are generating the grid on the fly, make the reference length 1
-  !
-  Lref = one
-  !
-  ! The Taylor-Green vortex problem is always 3D
-  !
-  nr = 3
-  !
-  ! Estimate the number of cells required to get the requested DOF
-  !
-  nc = nint( real(VortexGrid_DOF,kind=wp) / real(n_order+1,kind=wp) )
-  !
-  np = nc + 1 ! number of grid nodes in each direction
-  !
-  ncell = nc*nc*nc ! total number of grid cells
-  nnode = np*np*np ! total number of grid nodes
-  nfbnd = 6*nc*nc  ! total number of boundary faces
-  !
-  ! Allocate all the arrays needed to define the grid
-  !
-  allocate ( xyz_nodes(1:nr,1:nnode) , source=zero , &
-             stat=ierr , errmsg=error_message )
-  call alloc_error(pname,"xyz_nodes",1,__LINE__,__FILE__,ierr,error_message)
-  !
-  allocate ( nodes_of_cell_ptr(1:ncell+1) , source=0 , &
-             stat=ierr , errmsg=error_message )
-  call alloc_error(pname,"nodes_of_cell_ptr",1,__LINE__,__FILE__,ierr, &
-                   error_message)
-  !
-  allocate ( nodes_of_cell(1:geom_nodes(Geom_Hexa)*ncell) , source=0 , &
-             stat=ierr , errmsg=error_message )
-  call alloc_error(pname,"nodes_of_cell",1,__LINE__,__FILE__,ierr,error_message)
-  !
-  allocate ( bface(1:nbfai,1:nfbnd) , source=0 , &
-             stat=ierr , errmsg=error_message )
-  call alloc_error(pname,"bface",1,__LINE__,__FILE__,ierr,error_message)
-  !
-  allocate ( cell_geom(1:ncell) , source=Geom_Hexa , &
-             stat=ierr , errmsg=error_message )
-  call alloc_error(pname,"cell_geom",1,__LINE__,__FILE__,ierr,error_message)
-  !
-  allocate ( cell_order(1:ncell) , source=n_order , &
-             stat=ierr , errmsg=error_message )
-  call alloc_error(pname,"cell_order",1,__LINE__,__FILE__,ierr,error_message)
-  !
-  allocate ( perturb(1:nr,1:nnode) , source=real(0,kind=r4) , &
-             stat=ierr , errmsg=error_message )
-  call alloc_error(pname,"perturb",1,__LINE__,__FILE__,ierr,error_message)
-  !
-  ! #######
-  ! #######
-  ! ## 1 ##
-  ! #######
-  ! #######
-  !
-  ! Create the nodes_of_cell_ptr array
-  !
-  nodes_of_cell_ptr(1) = 0
-  do n = 2,size(nodes_of_cell_ptr)
-    nodes_of_cell_ptr(n) = nodes_of_cell_ptr(n-1) + geom_nodes(Geom_Hexa)
-  end do
-  !
-  ! Create the nodes_of_cell array
-  !
-  do k = 1,nc
-    do j = 1,nc
-      do i = 1,nc
-        !
-        n = nodes_of_cell_ptr( map3dto1d(i,j,k,nc) )
-        !
-        nodes_of_cell(n+1) = map3dto1d(i  ,j  ,k  ,np)
-        nodes_of_cell(n+2) = map3dto1d(i+1,j  ,k  ,np)
-        nodes_of_cell(n+3) = map3dto1d(i+1,j+1,k  ,np)
-        nodes_of_cell(n+4) = map3dto1d(i  ,j+1,k  ,np)
-        nodes_of_cell(n+5) = map3dto1d(i  ,j  ,k+1,np)
-        nodes_of_cell(n+6) = map3dto1d(i+1,j  ,k+1,np)
-        nodes_of_cell(n+7) = map3dto1d(i+1,j+1,k+1,np)
-        nodes_of_cell(n+8) = map3dto1d(i  ,j+1,k+1,np)
-        !
-      end do
-    end do
-  end do
-  !
-  ! #######
-  ! #######
-  ! ## 2 ##
-  ! #######
-  ! #######
-  !
-  ! Compute the cell length for a Cartesian/uniform grid
-  !
-  dl = real(1,kind=r4) / real(np-1,kind=r4)
-  !
-  ! Compute the random perturbations if the flag was set on input
-  !
-  if (VortexGrid_random_perturb) then
-    !
-    rbas = dl * real(abs(VortexGrid_perturb_percent),kind=r4) &
-              / real(100,kind=r4)
-    radj = rbas / real(2,kind=r4)
-    !
-    if (VortexGrid_perturb_percent < 0) then
-      !
-      ! Randomly perturb the crap out of everything
-      !
-      do k = 2,np-1
-        do j = 2,np-1
-          do i = 2,np-1
-            !
-            n = map3dto1d(i,j,k,np)
-            !
-            do l = 1,nr
-              rval = random(rbas) - radj
-              perturb(l,n) = rval
-            end do
-            !
-          end do
-        end do
-      end do
-      !
-    else
-      !
-      ! Get the random perturbation in along i for y
-      !
-      do i = 2,np-1
-        rval = random(rbas) - radj
-        do k = 2,np-1
-          do j = 2,np-1
-            n = map3dto1d(i,j,k,np)
-            perturb(2,n) = rval
-          end do
-        end do
-      end do
-      !
-      ! Get the random perturbation along j for z
-      !
-      do j = 2,np-1
-        rval = random(rbas) - radj
-        do k = 2,np-1
-          do i = 2,np-1
-            n = map3dto1d(i,j,k,np)
-            perturb(3,n) = rval
-          end do
-        end do
-      end do
-      !
-      ! Get the random perturbation along k for x
-      !
-      do k = 2,np-1
-        rval = random(rbas) - radj
-        do j = 2,np-1
-          do i = 2,np-1
-            n = map3dto1d(i,j,k,np)
-            perturb(1,n) = rval
-          end do
-        end do
-      end do
-      !
-    end if
-    !
-    ! Have the root processor broadcast its perturbations to all the
-    ! other processors so that the perturbations will be consistent
-    ! on all processors.
-    !
-    call mpi_bcast(perturb,size(perturb,kind=int_mpi), &
-                   MPI_REAL,0_int_mpi,MPI_COMM_WORLD,mpierr)
-    !
-  end if
-  !
-  ! Create the grid node coordinates as a cube from (0,0,0) to (1,1,1)
-  !
-  do k = 1,np
-    !
-    z = dl * real(k-1,kind=r4)
-    !
-    do j = 1,np
-      !
-      y = dl * real(j-1,kind=r4)
-      !
-      do i = 1,np
-        !
-        x = dl * real(i-1,kind=r4)
-        !
-        n = map3dto1d(i,j,k,np)
-        !
-        xyz_nodes(1,n) = real( x + perturb(1,n) , kind=wp )
-        xyz_nodes(2,n) = real( y + perturb(2,n) , kind=wp )
-        xyz_nodes(3,n) = real( z + perturb(3,n) , kind=wp )
-        !
-      end do
-    end do
-  end do
-  !
-  ! Deallocate perturb since it is no longer needed
-  !
-  deallocate ( perturb , stat=ierr , errmsg=error_message )
-  call alloc_error(pname,"perturb",2,__LINE__,__FILE__,ierr,error_message)
-  !
-  ! Scale the grid node coordinates to the cube (-1,-1,-1) to (1,1,1)
-  !
-  xyz_nodes = two*xyz_nodes - one
-  !
-  ! Scale the grid node coordinates to the cube (-pi,-pi,-pi) to (pi,pi,pi)
-  !
-  xyz_nodes = PI * xyz_nodes
-  !
-  ! #######
-  ! #######
-  ! ## 3 ##
-  ! #######
-  ! #######
-  !
-  ! Create the bface array
-  !
-  nf_max = 0
-  !
-  ! Loop through the 6 grid boundaries
-  ! NOTE: This corresponds to the grid boundaries in
-  !       the order [imin,imax,jmin,jmax,kmin,kmax]
-  !
-  nf_min = nf_max
-  !
-  do k = 1,nc
-    do j = 1,nc
-      !
-      nf_min = nf_min + 1
-      nf_max = nf_min + nc*nc
-      !
-      bface( 1,nf_min) = bc_periodic
-      bface( 2,nf_min) = map3dto1d(1 ,j,k,nc)
-      bface( 3,nf_min) = Geom_Hexa
-      bface( 4,nf_min) = HostFace3D(1)
-      bface( 5,nf_min) = nf_max
-      bface( 6,nf_min) = map3dto1d(nc,j,k,nc)
-      bface( 8,nf_min) = Geom_Hexa
-      bface( 9,nf_min) = HostFace3D(2)
-      bface(10,nf_min) = ncell + nf_min
-      !
-      bface( 1,nf_max) = bc_periodic
-      bface( 2,nf_max) = bface(6,nf_min)
-      bface( 3,nf_max) = bface(8,nf_min)
-      bface( 4,nf_max) = bface(9,nf_min)
-      bface( 5,nf_max) = nf_min
-      bface( 6,nf_max) = bface(2,nf_min)
-      bface( 8,nf_max) = bface(3,nf_min)
-      bface( 9,nf_max) = bface(4,nf_min)
-      bface(10,nf_max) = ncell + nf_max
-      !
-    end do
-  end do
-  !
-  nf_min = nf_max
-  !
-  do k = 1,nc
-    do i = 1,nc
-      !
-      nf_min = nf_min + 1
-      nf_max = nf_min + nc*nc
-      !
-      bface( 1,nf_min) = bc_periodic
-      bface( 2,nf_min) = map3dto1d(i,1 ,k,nc)
-      bface( 3,nf_min) = Geom_Hexa
-      bface( 4,nf_min) = HostFace3D(3)
-      bface( 5,nf_min) = nf_max
-      bface( 6,nf_min) = map3dto1d(i,nc,k,nc)
-      bface( 8,nf_min) = Geom_Hexa
-      bface( 9,nf_min) = HostFace3D(4)
-      bface(10,nf_min) = ncell + nf_min
-      !
-      bface( 1,nf_max) = bc_periodic
-      bface( 2,nf_max) = bface(6,nf_min)
-      bface( 3,nf_max) = bface(8,nf_min)
-      bface( 4,nf_max) = bface(9,nf_min)
-      bface( 5,nf_max) = nf_min
-      bface( 6,nf_max) = bface(2,nf_min)
-      bface( 8,nf_max) = bface(3,nf_min)
-      bface( 9,nf_max) = bface(4,nf_min)
-      bface(10,nf_max) = ncell + nf_max
-      !
-    end do
-  end do
-  !
-  nf_min = nf_max
-  !
-  do j = 1,nc
-    do i = 1,nc
-      !
-      nf_min = nf_min + 1
-      nf_max = nf_min + nc*nc
-      !
-      bface( 1,nf_min) = bc_periodic
-      bface( 2,nf_min) = map3dto1d(i,j,1 ,nc)
-      bface( 3,nf_min) = Geom_Hexa
-      bface( 4,nf_min) = HostFace3D(5)
-      bface( 5,nf_min) = nf_max
-      bface( 6,nf_min) = map3dto1d(i,j,nc,nc)
-      bface( 8,nf_min) = Geom_Hexa
-      bface( 9,nf_min) = HostFace3D(6)
-      bface(10,nf_min) = ncell + nf_min
-      !
-      bface( 1,nf_max) = bc_periodic
-      bface( 2,nf_max) = bface(6,nf_min)
-      bface( 3,nf_max) = bface(8,nf_min)
-      bface( 4,nf_max) = bface(9,nf_min)
-      bface( 5,nf_max) = nf_min
-      bface( 6,nf_max) = bface(2,nf_min)
-      bface( 8,nf_max) = bface(3,nf_min)
-      bface( 9,nf_max) = bface(4,nf_min)
-      bface(10,nf_max) = ncell + nf_max
-      !
-    end do
-  end do
-  !
-  call debug_timer(leaving_procedure,pname)
-  !
-  contains
-  !
-  pure function map3dto1d(i,j,k,n) result(return_value)
-    integer, intent(in) :: i,j,k,n
-    integer :: return_value
-    return_value = i + n*(j-1) + n*n*(k-1)
-  end function map3dto1d
-  !
-end subroutine create_TaylorGreenVortex_grid
-!
-!###############################################################################
-!
-subroutine create_postproc_debug_grid
-  !
-  !.. Use Statements ..
-  use order_mod, only : n_order
-  use ovar,      only : Lref
-  use geovar,    only : nr,nbfai,nnode,ncell,nfbnd,xyz_nodes
-  use geovar,    only : bface,nodes_of_cell_ptr,nodes_of_cell
-  use geovar,    only : cell_geom,cell_order
-  use ovar,      only : VortexGrid_random_perturb
-  use ovar,      only : VortexGrid_perturb_percent
-  !
-  !.. Local Scalars ..
-  integer :: nc,np,ierr,i,j,k,l,n
-  integer :: n1,n2,nf_min,nf_max
-  integer :: nc_min,nc_max
-  integer :: no_min,no_max
-  logical(ldk) :: bnd_face_error
-  real(r4) :: x,y,z,dl
-  real(r4) :: rbas,radj,rval
-  !
-  !.. Local Arrays ..
-  integer, dimension(1:4)      :: top,bot,ip
-  integer, dimension(1:8)      :: cell_nodes
-  integer, dimension(1:8,1:24) :: node_order
-  !
-  !.. Local Allocatable Arrays ..
-  integer,  allocatable :: lpoin(:)
-  integer,  allocatable :: original_noc(:)
-  real(r4), allocatable :: perturb(:,:)
-  !
-  !.. Local Parameters ..
-  character(len=*), parameter :: pname = "create_postproc_debug_grid"
-  !
-  integer, parameter :: cells_per_cpu = 3**3
-  integer, parameter :: basic_order(8,3) = reshape( [1,2,3,4,5,6,7,8, &
-                                                     2,6,7,3,1,5,8,4, &
-                                                     1,5,6,2,4,8,7,3] , &
-                                                    shape(basic_order) )
-  integer, parameter :: flip(4) = [1,4,3,2]
-  !
-continue
-  !
-  call debug_timer(entering_procedure,pname)
-  !
-  ! Reset the grid format input parameter to identify
-  ! the grid as internally generated
-  !
-  grid_format = Internally_Generated_Grid
-  !
-  bnd_face_error = fals
-  !
-  ! Create the node_order array to prepare for randomizing the node orderings
-  ! NOTE: We subtract one so node_order can be used as an offset
-  !
-  n = 0
-  do j = 1,3
-    bot = basic_order(1:4,j)
-    top = basic_order(5:8,j)
-    do i = 0,3
-      n = n + 1
-      node_order(:,n) = [cshift(bot,shift=i),cshift(top,shift=i)] - 1
-    end do
-    bot = top(flip)
-    top = basic_order(flip,j)
-    do i = 0,3
-      n = n + 1
-      node_order(:,n) = [cshift(bot,shift=i),cshift(top,shift=i)] - 1
-    end do
-  end do
-  !
-  ! If we are generating the grid on the fly, make the reference length 1
-  !
-  Lref = one
-  !
-  nr = 3
-  !
-  ! Estimate the total number of cells
-  !
-  nc = nint( real(ncpu*cells_per_cpu,kind=wp)**one3 )
-  !
-  np = nc + 1 ! number of grid nodes in each direction
-  !
-  ncell = nc*nc*nc ! total number of grid cells
-  nnode = np*np*np ! total number of grid nodes
-  nfbnd = 6*nc*nc  ! total number of boundary faces
-  !
-  ! Compute the cell length for a Cartesian/uniform grid
-  !
-  dl = real(1,kind=r4) / real(np-1,kind=r4)
-  !
-  ! Allocate all the arrays needed to define the grid
-  !
-  allocate ( xyz_nodes(1:nr,1:nnode) , source=zero , &
-             stat=ierr , errmsg=error_message )
-  call alloc_error(pname,"xyz_nodes",1,__LINE__,__FILE__,ierr,error_message)
-  !
-  allocate ( nodes_of_cell_ptr(1:ncell+1) , source=0 , &
-             stat=ierr , errmsg=error_message )
-  call alloc_error(pname,"nodes_of_cell_ptr",1,__LINE__,__FILE__,ierr, &
-                   error_message)
-  !
-  allocate ( nodes_of_cell(1:geom_nodes(Geom_Hexa)*ncell) , source=0 , &
-             stat=ierr , errmsg=error_message )
-  call alloc_error(pname,"nodes_of_cell",1,__LINE__,__FILE__,ierr,error_message)
-  !
-  allocate ( bface(1:nbfai,1:nfbnd) , source=0 , &
-             stat=ierr , errmsg=error_message )
-  call alloc_error(pname,"bface",1,__LINE__,__FILE__,ierr,error_message)
-  !
-  allocate ( cell_geom(1:ncell) , source=Geom_Hexa , &
-             stat=ierr , errmsg=error_message )
-  call alloc_error(pname,"cell_geom",1,__LINE__,__FILE__,ierr,error_message)
-  !
-  allocate ( cell_order(1:ncell) , source=n_order , &
-             stat=ierr , errmsg=error_message )
-  call alloc_error(pname,"cell_order",1,__LINE__,__FILE__,ierr,error_message)
-  !
-  ! ONLY HAVE THE ROOT PROCESSOR CREATE THE GRID SINCE THERE IS A LOT OF
-  ! RANDOMIZATION INVOLVED. WE WILL BROADCAST THE RESULTS TO ALL THE OTHER
-  ! PROCESSORS AFTERWARDS SO THAT ALL PROCESSORS HAVE THE SAME GRID DATA.
-  !
-  only_root_creates_grid: if (mypnum == 0) then
-    !
-    ! #######
-    ! #######
-    ! ## 1 ##
-    ! #######
-    ! #######
-    !
-    ! Create the nodes_of_cell_ptr array
-    !
-    nodes_of_cell_ptr(1) = 0
-    do n = 2,size(nodes_of_cell_ptr)
-      nodes_of_cell_ptr(n) = nodes_of_cell_ptr(n-1) + geom_nodes(Geom_Hexa)
-    end do
-    !
-    ! Create the nodes_of_cell array
-    !
-    do k = 1,nc
-      do j = 1,nc
-        do i = 1,nc
-          !
-          n = nodes_of_cell_ptr( map3dto1d(i,j,k,nc) )
-          !
-          nodes_of_cell(n+1) = map3dto1d(i  ,j  ,k  ,np)
-          nodes_of_cell(n+2) = map3dto1d(i+1,j  ,k  ,np)
-          nodes_of_cell(n+3) = map3dto1d(i+1,j+1,k  ,np)
-          nodes_of_cell(n+4) = map3dto1d(i  ,j+1,k  ,np)
-          nodes_of_cell(n+5) = map3dto1d(i  ,j  ,k+1,np)
-          nodes_of_cell(n+6) = map3dto1d(i+1,j  ,k+1,np)
-          nodes_of_cell(n+7) = map3dto1d(i+1,j+1,k+1,np)
-          nodes_of_cell(n+8) = map3dto1d(i  ,j+1,k+1,np)
-          !
-        end do
-      end do
-    end do
-    !
-    ! Randomize the node ordering for all cells
-    !
-    if (VortexGrid_random_perturb) then
-      !
-      ! Create a copy of nodes_of_cell before it is randomized
-      !
-      allocate ( original_noc(1:size(nodes_of_cell)) , source=nodes_of_cell , &
-                 stat=ierr , errmsg=error_message )
-      call alloc_error(pname,"original_noc",1,__LINE__,__FILE__,ierr, &
-                       error_message)
-      !
-      do k = 1,nc
-        do j = 1,nc
-          do i = 1,nc
-            !
-            n = map3dto1d(i,j,k,nc)
-            !
-            l = random(size(node_order,dim=2))
-            l = min( max(1,l) , size(node_order,dim=2) )
-            n1 = nodes_of_cell_ptr(n)+1
-            n2 = nodes_of_cell_ptr(n+1)
-            nodes_of_cell(n1:n2) = nodes_of_cell( n1 + node_order(:,l) )
-            !
-          end do
-        end do
-      end do
-      !
-    end if
-    !
-    ! #######
-    ! #######
-    ! ## 2 ##
-    ! #######
-    ! #######
-    !
-    allocate ( perturb(1:nr,1:nnode) , source=real(0,kind=r4) , &
-               stat=ierr , errmsg=error_message )
-    call alloc_error(pname,"perturb",1,__LINE__,__FILE__,ierr,error_message)
-    !
-    if (VortexGrid_random_perturb) then
-      !
-      ! Compute the random perturbations of the interior node coordinates
-      !
-      rbas = real(abs(VortexGrid_perturb_percent),kind=r4) / real(100,kind=r4)
-      radj = rbas / real(2,kind=r4)
-      !
-      ! Randomly perturb the crap out of everything
-      !
-      do k = 2,np-1
-        do j = 2,np-1
-          do i = 2,np-1
-            !
-            n = map3dto1d(i,j,k,np)
-            !
-            do l = 1,nr
-              rval = random(rbas) - radj
-              perturb(l,n) = rval
-            end do
-            !
-          end do
-        end do
-      end do
-      !
-    end if
-    !
-    ! Create the grid node coordinates as a cube from (0,0,0) to (1,1,1)
-    !
-    do k = 1,np
-      !
-      z = real(k-1,kind=r4)
-      !
-      do j = 1,np
-        !
-        y = real(j-1,kind=r4)
-        !
-        do i = 1,np
-          !
-          x = real(i-1,kind=r4)
-          !
-          n = map3dto1d(i,j,k,np)
-          !
-          xyz_nodes(1,n) = real( x + perturb(1,n) , kind=wp )
-          xyz_nodes(2,n) = real( y + perturb(2,n) , kind=wp )
-          xyz_nodes(3,n) = real( z + perturb(3,n) , kind=wp )
-          !
-        end do
-      end do
-    end do
-    !
-    ! Deallocate perturb since it is no longer needed
-    !
-    deallocate ( perturb , stat=ierr , errmsg=error_message )
-    call alloc_error(pname,"perturb",2,__LINE__,__FILE__,ierr,error_message)
-    !
-    ! #######
-    ! #######
-    ! ## 3 ##
-    ! #######
-    ! #######
-    !
-    allocate ( lpoin(1:nnode) , source=0 , stat=ierr , errmsg=error_message )
-    call alloc_error(pname,"lpoin",1,__LINE__,__FILE__,ierr,error_message)
-    !
-    ! Create the bface array
-    !
-    nf_max = 0
-    !
-    ! Loop through the 6 grid boundaries
-    ! NOTE: This corresponds to the grid boundaries in
-    !       the order [imin,imax,jmin,jmax,kmin,kmax]
-    !
-    nf_min = nf_max
-    !
-    do k = 1,nc
-      do j = 1,nc
-        !
-        nf_min = nf_min + 1
-        nf_max = nf_min + nc*nc
-        !
-        nc_min = map3dto1d(1 ,j,k,nc)
-        nc_max = map3dto1d(nc,j,k,nc)
-        !
-        no_min = 0
-        no_max = 0
-        !
-        if (VortexGrid_random_perturb) then
-          !
-          ! ******************
-          ! *** X-Min Face ***
-          ! ******************
-          !
-          n1 = nodes_of_cell_ptr(nc_min)+1
-          n2 = nodes_of_cell_ptr(nc_min+1)
-          !
-          ! Mark the nodes on this face
-          !
-          lpoin( original_noc(n1 + Xmin3D) ) = 1
-          !
-          ! Extract the nodes of this cell in the new randomized order
-          !
-          cell_nodes(1:8) = nodes_of_cell(n1:n2)
-          !
-          ! Find which side of the host cell is now on the boundary
-          !
-          find_xmin_face: do n = 1,6
-            ! Node offsets for this face of the cell
-            ! NOTE: The +1 is because the indexing in side_nodes starts at 0.
-            ip(1:4) = side_nodes(1:4,n,Geom_Hexa) + 1
-            ! Check if all nodes for this face have been marked
-            if (sum(lpoin(cell_nodes(ip))) == 4) then
-              no_min = n                ! Save the cell face on the boundary
-              lpoin(cell_nodes(ip)) = 0 ! Reset the marked nodes to zero
-              exit find_xmin_face
-            end if
-          end do find_xmin_face
-          !
-          ! Make sure that no_min was set
-          !
-          if (no_min == 0) then
-            bnd_face_error = true
-            write (iout,1) "X-Min"
-          end if
-          !
-          ! ******************
-          ! *** X-Max Face ***
-          ! ******************
-          !
-          n1 = nodes_of_cell_ptr(nc_max)+1
-          n2 = nodes_of_cell_ptr(nc_max+1)
-          !
-          ! Mark the nodes on this face
-          !
-          lpoin( original_noc(n1 + Xmax3D) ) = 1
-          !
-          ! Extract the nodes of this cell in the new randomized order
-          !
-          cell_nodes(1:8) = nodes_of_cell(n1:n2)
-          !
-          ! Find which side of the host cell is now on the boundary
-          !
-          find_xmax_face: do n = 1,6
-            ! Node offsets for this face of the cell
-            ! NOTE: The +1 is because the indexing in side_nodes starts at 0.
-            ip(1:4) = side_nodes(1:4,n,Geom_Hexa) + 1
-            ! Check if all nodes for this face have been marked
-            if (sum(lpoin(cell_nodes(ip))) == 4) then
-              no_max = n                ! Save the cell face on the boundary
-              lpoin(cell_nodes(ip)) = 0 ! Reset the marked nodes to zero
-              exit find_xmax_face
-            end if
-          end do find_xmax_face
-          !
-          ! Make sure that no_max was set
-          !
-          if (no_max == 0) then
-            bnd_face_error = true
-            write (iout,1) "X-Max"
-          end if
-          !
-        else
-          !
-          no_min = HostFace3D(1)
-          no_max = HostFace3D(2)
-          !
-        end if
-        !
-        bface( 1,nf_min) = bc_periodic
-        bface( 2,nf_min) = nc_min
-        bface( 3,nf_min) = Geom_Hexa
-        bface( 4,nf_min) = no_min
-        bface( 5,nf_min) = nf_max
-        bface( 6,nf_min) = nc_max
-        bface( 8,nf_min) = Geom_Hexa
-        bface( 9,nf_min) = no_max
-        bface(10,nf_min) = ncell + nf_min
-        !
-        bface( 1,nf_max) = bc_periodic
-        bface( 2,nf_max) = bface(6,nf_min)
-        bface( 3,nf_max) = bface(8,nf_min)
-        bface( 4,nf_max) = bface(9,nf_min)
-        bface( 5,nf_max) = nf_min
-        bface( 6,nf_max) = bface(2,nf_min)
-        bface( 8,nf_max) = bface(3,nf_min)
-        bface( 9,nf_max) = bface(4,nf_min)
-        bface(10,nf_max) = ncell + nf_max
-        !
-      end do
-    end do
-    !
-    nf_min = nf_max
-    !
-    do k = 1,nc
-      do i = 1,nc
-        !
-        nf_min = nf_min + 1
-        nf_max = nf_min + nc*nc
-        !
-        nc_min = map3dto1d(i,1 ,k,nc)
-        nc_max = map3dto1d(i,nc,k,nc)
-        !
-        no_min = 0
-        no_max = 0
-        !
-        if (VortexGrid_random_perturb) then
-          !
-          ! ******************
-          ! *** Y-Min Face ***
-          ! ******************
-          !
-          n1 = nodes_of_cell_ptr(nc_min)+1
-          n2 = nodes_of_cell_ptr(nc_min+1)
-          !
-          ! Mark the nodes on this face
-          !
-          lpoin( original_noc(n1 + Ymin3D) ) = 1
-          !
-          ! Extract the nodes of this cell in the new randomized order
-          !
-          cell_nodes(1:8) = nodes_of_cell(n1:n2)
-          !
-          ! Find which side of the host cell is now on the boundary
-          !
-          find_ymin_face: do n = 1,6
-            ! Node offsets for this face of the cell
-            ! NOTE: The +1 is because the indexing in side_nodes starts at 0.
-            ip(1:4) = side_nodes(1:4,n,Geom_Hexa) + 1
-            ! Check if all nodes for this face have been marked
-            if (sum(lpoin(cell_nodes(ip))) == 4) then
-              no_min = n                ! Save the cell face on the boundary
-              lpoin(cell_nodes(ip)) = 0 ! Reset the marked nodes to zero
-              exit find_ymin_face
-            end if
-          end do find_ymin_face
-          !
-          ! Make sure that no_min was set
-          !
-          if (no_min == 0) then
-            bnd_face_error = true
-            write (iout,1) "Y-Min"
-          end if
-          !
-          ! ******************
-          ! *** Y-Max Face ***
-          ! ******************
-          !
-          n1 = nodes_of_cell_ptr(nc_max)+1
-          n2 = nodes_of_cell_ptr(nc_max+1)
-          !
-          ! Mark the nodes on this face
-          !
-          lpoin( original_noc(n1 + Ymax3D) ) = 1
-          !
-          ! Extract the nodes of this cell in the new randomized order
-          !
-          cell_nodes(1:8) = nodes_of_cell(n1:n2)
-          !
-          ! Find which side of the host cell is now on the boundary
-          !
-          find_ymax_face: do n = 1,6
-            ! Node offsets for this face of the cell
-            ! NOTE: The +1 is because the indexing in side_nodes starts at 0.
-            ip(1:4) = side_nodes(1:4,n,Geom_Hexa) + 1
-            ! Check if all nodes for this face have been marked
-            if (sum(lpoin(cell_nodes(ip))) == 4) then
-              no_max = n                ! Save the cell face on the boundary
-              lpoin(cell_nodes(ip)) = 0 ! Reset the marked nodes to zero
-              exit find_ymax_face
-            end if
-          end do find_ymax_face
-          !
-          ! Make sure that no_max was set
-          !
-          if (no_max == 0) then
-            bnd_face_error = true
-            write (iout,1) "Y-Max"
-          end if
-          !
-        else
-          !
-          no_min = HostFace3D(3)
-          no_max = HostFace3D(4)
-          !
-        end if
-        !
-        bface( 1,nf_min) = bc_periodic
-        bface( 2,nf_min) = nc_min
-        bface( 3,nf_min) = Geom_Hexa
-        bface( 4,nf_min) = no_min
-        bface( 5,nf_min) = nf_max
-        bface( 6,nf_min) = nc_max
-        bface( 8,nf_min) = Geom_Hexa
-        bface( 9,nf_min) = no_max
-        bface(10,nf_min) = ncell + nf_min
-        !
-        bface( 1,nf_max) = bc_periodic
-        bface( 2,nf_max) = bface(6,nf_min)
-        bface( 3,nf_max) = bface(8,nf_min)
-        bface( 4,nf_max) = bface(9,nf_min)
-        bface( 5,nf_max) = nf_min
-        bface( 6,nf_max) = bface(2,nf_min)
-        bface( 8,nf_max) = bface(3,nf_min)
-        bface( 9,nf_max) = bface(4,nf_min)
-        bface(10,nf_max) = ncell + nf_max
-        !
-      end do
-    end do
-    !
-    nf_min = nf_max
-    !
-    do j = 1,nc
-      do i = 1,nc
-        !
-        nf_min = nf_min + 1
-        nf_max = nf_min + nc*nc
-        !
-        nc_min = map3dto1d(i,j,1 ,nc)
-        nc_max = map3dto1d(i,j,nc,nc)
-        !
-        no_min = 0
-        no_max = 0
-        !
-        if (VortexGrid_random_perturb) then
-          !
-          ! ******************
-          ! *** Z-Min Face ***
-          ! ******************
-          !
-          n1 = nodes_of_cell_ptr(nc_min)+1
-          n2 = nodes_of_cell_ptr(nc_min+1)
-          !
-          ! Mark the nodes on this face
-          !
-          lpoin( original_noc(n1 + Zmin3D) ) = 1
-          !
-          ! Extract the nodes of this cell in the new randomized order
-          !
-          cell_nodes(1:8) = nodes_of_cell(n1:n2)
-          !
-          ! Find which side of the host cell is now on the boundary
-          !
-          find_zmin_face: do n = 1,6
-            ! Node offsets for this face of the cell
-            ! NOTE: The +1 is because the indexing in side_nodes starts at 0.
-            ip(1:4) = side_nodes(1:4,n,Geom_Hexa) + 1
-            ! Check if all nodes for this face have been marked
-            if (sum(lpoin(cell_nodes(ip))) == 4) then
-              no_min = n                ! Save the cell face on the boundary
-              lpoin(cell_nodes(ip)) = 0 ! Reset the marked nodes to zero
-              exit find_zmin_face
-            end if
-          end do find_zmin_face
-          !
-          ! Make sure that no_min was set
-          !
-          if (no_min == 0) then
-            bnd_face_error = true
-            write (iout,1) "Z-Min"
-          end if
-          !
-          ! ******************
-          ! *** Z-Max Face ***
-          ! ******************
-          !
-          n1 = nodes_of_cell_ptr(nc_max)+1
-          n2 = nodes_of_cell_ptr(nc_max+1)
-          !
-          ! Mark the nodes on this face
-          !
-          lpoin( original_noc(n1 + Zmax3D) ) = 1
-          !
-          ! Extract the nodes of this cell in the new randomized order
-          !
-          cell_nodes(1:8) = nodes_of_cell(n1:n2)
-          !
-          ! Find which side of the host cell is now on the boundary
-          !
-          find_zmax_face: do n = 1,6
-            ! Node offsets for this face of the cell
-            ! NOTE: The +1 is because the indexing in side_nodes starts at 0.
-            ip(1:4) = side_nodes(1:4,n,Geom_Hexa) + 1
-            ! Check if all nodes for this face have been marked
-            if (sum(lpoin(cell_nodes(ip))) == 4) then
-              no_max = n                ! Save the cell face on the boundary
-              lpoin(cell_nodes(ip)) = 0 ! Reset the marked nodes to zero
-              exit find_zmax_face
-            end if
-          end do find_zmax_face
-          !
-          ! Make sure that no_max was set
-          !
-          if (no_max == 0) then
-            bnd_face_error = true
-            write (iout,1) "Z-Max"
-          end if
-          !
-        else
-          !
-          no_min = HostFace3D(5)
-          no_max = HostFace3D(6)
-          !
-        end if
-        !
-        bface( 1,nf_min) = bc_periodic
-        bface( 2,nf_min) = nc_min
-        bface( 3,nf_min) = Geom_Hexa
-        bface( 4,nf_min) = no_min
-        bface( 5,nf_min) = nf_max
-        bface( 6,nf_min) = nc_max
-        bface( 8,nf_min) = Geom_Hexa
-        bface( 9,nf_min) = no_max
-        bface(10,nf_min) = ncell + nf_min
-        !
-        bface( 1,nf_max) = bc_periodic
-        bface( 2,nf_max) = bface(6,nf_min)
-        bface( 3,nf_max) = bface(8,nf_min)
-        bface( 4,nf_max) = bface(9,nf_min)
-        bface( 5,nf_max) = nf_min
-        bface( 6,nf_max) = bface(2,nf_min)
-        bface( 8,nf_max) = bface(3,nf_min)
-        bface( 9,nf_max) = bface(4,nf_min)
-        bface(10,nf_max) = ncell + nf_max
-        !
-      end do
-    end do
-    !
-    if (allocated(lpoin)) then
-      deallocate ( lpoin , stat=ierr , errmsg=error_message )
-      call alloc_error(pname,"lpoin",2,__LINE__,__FILE__,ierr,error_message)
-    end if
-    !
-    if (allocated(original_noc))  then
-      deallocate ( original_noc , stat=ierr , errmsg=error_message )
-      call alloc_error(pname,"original_noc",2,__LINE__,__FILE__,ierr, &
-                       error_message)
-    end if
-    !
-  end if only_root_creates_grid
-  !
-  ! Have the root processor broadcast the value of bnd_face_error so that
-  ! the simulation can be aborted before continuing if there was an error
-  !
-  if (ncpu > 1) then
-    call mpi_bcast(bnd_face_error,1_int_mpi, &
-                   MPI_LOGICAL,0_int_mpi,MPI_COMM_WORLD,mpierr)
-  end if
-  !
-  if (bnd_face_error) then
-    write (error_message,2)
-    call stop_gfr(stop_mpi,pname,__LINE__,__FILE__,error_message)
-  end if
-  !
-  ! Have the root processor broadcast all the grid
-  ! information to all the other processors.
-  !
-  if (ncpu > 1) then
-    !
-    ! Call mpi_barrier just to make sure the processor are syncronized
-    !
-    call mpi_barrier(MPI_COMM_WORLD,mpierr)
-    !
-    call mpi_bcast(xyz_nodes,size(xyz_nodes,kind=int_mpi), &
-                   mpi_flttyp,0_int_mpi,MPI_COMM_WORLD,mpierr)
-    !
-    call mpi_bcast(nodes_of_cell_ptr,size(nodes_of_cell_ptr,kind=int_mpi), &
-                   mpi_inttyp,0_int_mpi,MPI_COMM_WORLD,mpierr)
-    !
-    call mpi_bcast(nodes_of_cell,size(nodes_of_cell,kind=int_mpi), &
-                   mpi_inttyp,0_int_mpi,MPI_COMM_WORLD,mpierr)
-    !
-    call mpi_bcast(bface,size(bface,kind=int_mpi), &
-                   mpi_inttyp,0_int_mpi,MPI_COMM_WORLD,mpierr)
-    !
-    ! Call mpi_barrier just to make sure the processor are syncronized
-    !
-    call mpi_barrier(MPI_COMM_WORLD,mpierr)
-    !
-  end if
-  !
-  ! Scale the grid node coordinates to the cube (0,0,0) to (1,1,1)
-  !
- !xyz_nodes = dl * xyz_nodes
-  !
-  ! Scale the grid node coordinates to the cube (-1,-1,-1) to (1,1,1)
-  !
- !xyz_nodes = two*xyz_nodes - one
-  !
-  ! Scale the grid node coordinates to the cube (-pi,-pi,-pi) to (pi,pi,pi)
-  !
- !xyz_nodes = PI * xyz_nodes
-  !
-  call debug_timer(leaving_procedure,pname)
-  !
-  ! Format Statements
-  !
-  1 format (" Error finding new side of host cell on ",a," boundary face!")
-  2 format ("An error was detected finding the side of one or more host ", &
-            "cells that is on the boundary after randomizing the order of ", &
-            "the nodes defining each cell!")
-  !
-  contains
-  !
-  pure function map3dto1d(i,j,k,n) result(return_value)
-    integer, intent(in) :: i,j,k,n
-    integer :: return_value
-    return_value = i + n*(j-1) + n*n*(k-1)
-  end function map3dto1d
-  !
-end subroutine create_postproc_debug_grid
 !
 !###############################################################################
 !
@@ -4094,485 +2342,486 @@ end subroutine save_global_grid
 !
 !###############################################################################
 !
-subroutine adjust_for_same_dimension_ghost_cells()
-  !
-  ! Routine to make some adjustments to the data from the grid file
-  ! to account for ghost cells and new nodes associated with them
-  !
-  !.. Use Statements ..
-  use geovar, only : nr,ncell,nfbnd,nnode,n_totcel,n_totnod
-  use geovar, only : bface,nodes_of_cell_ptr,nodes_of_cell,xyz_nodes
-  use geovar, only : cell_geom,cell_order
-  use ovar,   only : Grid_Min,Grid_Max,Grid_Length
-  !
-  !.. Local Scalars ..
-  integer  :: g1,g2,i,h1,h2,nf,ng,ni,np
-  integer  :: ghost_cell,host_cell,host_geom,inode,host_side
-  integer  :: pf,p1,p2
-  integer  :: ni1,ni2,ierr
-  integer  :: periodic_cell,periodic_geom,periodic_side,pcnods
-  real(wp) :: theta
-  integer :: nfnods
-  !
-  !.. Local Arrays ..
-  integer,  dimension(1:4)      :: ip,periodic_ip
-  integer,  dimension(1:4)      :: face_nodes
-  integer,  dimension(1:4)      :: pface_nodes
-  real(wp), dimension(1:nr)     :: ptf
-  real(wp), dimension(1:nr)     :: xyz_h1
-  real(wp), dimension(1:nr)     :: xyz_h2
-  real(wp), dimension(1:nr)     :: xyz_ni
-  real(wp), dimension(1:nr)     :: ds,ds1,ds2
-  real(wp), dimension(1:nr)     :: rnrm,pnrm
-  real(wp), dimension(1:nr,1:8) :: periodic_nodes
-  !
-  !.. Local Parameters ..
-  character(len=*), parameter :: pname = "adjust_for_same_dimension_ghost_cells"
-  !
-  integer, parameter :: rotation = 0
-  !
-continue
-  !
-  call debug_timer(entering_procedure,pname)
-  !
-  ! Before we start adding ghost cells, lets get the extents of the grid domain
-  ! NOTE: ASSUME GRID BOUNDARIES OF CONSTANT X AND Y
-  !
-  Grid_Min = zero
-  Grid_Max = zero
-  !
-  Grid_Min(1:nr) = minval(xyz_nodes(1:nr,:),dim=2)
-  Grid_Max(1:nr) = maxval(xyz_nodes(1:nr,:),dim=2)
-  Grid_Length = Grid_Max - Grid_Min
-  !
-  ! #######
-  ! ## 1 ##
-  ! #######
-  !
-  ! Total number of interior plus ghost cells
-  !
-  n_totcel = ncell + nfbnd
-  !
-  ! Reallocate nodes_of_cell_ptr to account for ghost cells
-  !
-  call reallocate( nodes_of_cell_ptr , n_totcel+1 )
-  !
-  ! Set the number of nodes for each ghost cell
-  !
-  do nf = 1,nfbnd
-    !
-    if (bface(1,nf) /= bc_periodic) then
-      !
-      ! Not a periodic boundary, number of nodes is the same as interior
-      !
-      inode = geom_nodes( bface(3,nf) )
-      !
-    else
-      !
-      ! Periodic boundary, get the number of
-      ! nodes for the connected periodic cell
-      !
-      pf = bface(5,nf)
-      !
-      inode = geom_nodes( bface(3,pf) )
-      !
-    end if
-    !
-    nodes_of_cell_ptr(ncell+nf+1) = inode
-    !
-  end do
-  !
-  ! Reshuffle the ghost cell portion of nodes_of_cell_ptr
-  !
-  do i = ncell+2,size(nodes_of_cell_ptr)
-    nodes_of_cell_ptr(i) = nodes_of_cell_ptr(i) + nodes_of_cell_ptr(i-1)
-  end do
-  !
-  ! #######
-  ! ## 2 ##
-  ! #######
-  !
-  ! Reallocate nodes_of_cell to account for ghost cells
-  !
-  call reallocate( nodes_of_cell , last(nodes_of_cell_ptr) )
-  !
-  ! Loop over the boundary faces and find the nodes of each ghost cell.
-  ! The first two nodes are on the boundary face while the other nodes
-  ! are newly created and to be defined in step 3. The nodes are in
-  ! counter-clockwise ordering.
-  !
-  inode = nnode
-  !
-  do nf = 1,nfbnd
-    !
-    ghost_cell = nf + ncell
-    !
-    ! Node indices for the ghost cell
-    !
-    g1 = nodes_of_cell_ptr(ghost_cell)+1
-    g2 = nodes_of_cell_ptr(ghost_cell+1)
-    !
-    ! Information about boundary face
-    !
-    host_cell = bface(2,nf)
-    host_geom = bface(3,nf)
-    host_side = bface(4,nf)
-    !
-    ! Starting node index for the interior cell
-    !
-    h1 = nodes_of_cell_ptr(host_cell)+1
-    !
-    ! Get the number of nodes defining this face
-    !
-    nfnods = num_face_nodes(host_side,host_geom)
-    !
-    ! Node offsets for this face of the host cell
-    !
-    ip(1:nfnods) = side_nodes(1:nfnods,host_side,host_geom)
-    !
-    ! Use the node offsets to get the actual indices for these nodes
-    !
-    face_nodes(1:nfnods) = nodes_of_cell( h1 + ip(1:nfnods) )
-    !
-    ! Copy the face node indices into their correct locations for the ghost cell
-    !
-    nodes_of_cell(g1:g2) = ghost_nodes(face_nodes(1:nfnods),host_geom,host_side)
-   !!
-   !! Assign nodes defining boundary face from the host cell to the ghost cell
-   !! NOTE: We have to reverse the rotation/ordering of the face nodes so that
-   !!       the nodes of the ghost cell are defined such that the normal of
-   !!       each of its faces points outwards (this is the same as the interior
-   !!       cells). For a 2D host cell, there are only two nodes so we just
-   !!       need to switch them, i.e. node1 <=> node2.  For a 3D host cell,
-   !!       switching either nodes 1 & 3 or nodes 3 & 4 will do the trick.
-   !!       Since triangle faces only have three nodes, we will switch nodes
-   !!       1 & 3 for both triangle and quad faces so that we dont have to
-   !!       distinguish between the two.
-   !!
-   !! Copy over the face nodes to the ghost cell,
-   !! keeping the same ordering as the host cell.
-   !!
-   !nodes_of_cell(g1:g1-1+nfnods) = face_nodes(1:nfnods)
-   !!
-   !! Get the index of the node to switch with node 1.
-   !! NOTE: switch_index = nfnods (i.e. 2) for a 2D host cell
-   !!       switch_index = nfnods (i.e. 3) for a triangular boundary face
-   !!       switch_index = 3               for a quadrilateral boundary face
-   !! ADDITIONAL NOTE: switch_index also evaluates to nfnods (i.e. 1) for
-   !!                  a 1D host cell which is the correct value if the
-   !!                  rest of the code is ever set up to run 1D.
-   !!
-   !switch_index = min( nfnods , 3 )
-   !!
-   !! Switch the two face nodes required to reverse the face node ordering
-   !!
-   !nodes_of_cell(g1) = face_nodes(switch_index)
-   !nodes_of_cell(g1-1+switch_index) = face_nodes(1)
-    !
-    if (all(host_geom /= [Geom_1D,Geom_2D,Geom_3D])) then
-      write (error_message,100)
-      call stop_gfr(stop_mpi,pname,__LINE__,__FILE__,error_message)
-    end if
-    !
-    ! Create new nodes for the remaining ghost cell nodes
-    !
-    do i = g1,g2
-      if (nodes_of_cell(i) < 0) then
-        inode = inode + 1
-        nodes_of_cell(i) = inode
-      end if
-    end do
-    !
-  end do
-  !
-  ! Total number of nodes after the addition of
-  ! the newly created nodes for the ghost cells
-  !
-  n_totnod = inode
-  !
-  ! #######
-  ! ## 3 ##
-  ! #######
-  !
-  ! Reallocate cell_geom to account for ghost cells
-  !
-  call reallocate( cell_geom , n_totcel )
-  !
-  ! Reallocate cell_order to account for ghost cells
-  !
-  call reallocate( cell_order , n_totcel )
-  !
-  ! Fill in the information for the ghost cells
-  !
-  do nf = 1,nfbnd
-    cell_geom(nf+ncell) = cell_geom(bface(2,nf))
-    cell_order(nf+ncell) = cell_order(bface(2,nf))
-  end do
-  !
-  ! #######
-  ! ## 4 ##
-  ! #######
-  !
-  ! Reallocate xyz_nodes to account for ghost nodes
-  !
-  call reallocate( xyz_nodes , new_size2=n_totnod )
-  !
-  ! Loop over boundary faces to compute the
-  ! coordinates of the newly created ghost nodes
-  !
-  do nf = 1,nfbnd
-    !
-    ! Ghost cell and the corresponding node indices
-    !
-    ghost_cell = nf + ncell
-    !
-    g1 = nodes_of_cell_ptr(ghost_cell)+1
-    g2 = nodes_of_cell_ptr(ghost_cell+1)
-    !
-    ! Interior cell and the corresponding node indices
-    !
-    host_cell = bface(2,nf)
-    !
-    h1 = nodes_of_cell_ptr(host_cell)+1
-    h2 = nodes_of_cell_ptr(host_cell+1)
-    !
-    ! Information about boundary face
-    !
-    host_geom = bface(3,nf)
-    host_side = bface(4,nf)
-    !
-    ! Get the number of nodes defining this face
-    !
-    nfnods = num_face_nodes(host_side,host_geom)
-    !
-    ! Node offsets for this face of the host cell
-    !
-    ip(1:nfnods) = side_nodes(1:nfnods,host_side,host_geom)
-    !
-    ! Use the node offsets to get the actual indices for these nodes
-    !
-    face_nodes(1:nfnods) = nodes_of_cell( h1 + ip(1:nfnods) )
-    !
-    ! Outward unit normal to boundary face.
-    !
-    rnrm = face_normal( xyz_nodes(1:nr,face_nodes(1:nfnods)) )
-    rnrm = unit_vector( rnrm )
-    !
-    ! Store the coordinates for the first and last node of the cell
-    !
-    xyz_h1(:) = xyz_nodes(:,h1)
-    xyz_h2(:) = xyz_nodes(:,h2)
-    !
-    ! Conditional to treat periodic boundary conditions separately
-    !
-    if (bface(1,nf) /= bc_periodic) then
-      !
-      ! This is not a periodic boundary face
-      !
-      ! Center of boundary face by averaging the
-      ! coordinates of the two boundary nodes
-      !
-      ptf(1:nr) = node_center( xyz_nodes(1:nr,face_nodes(1:nfnods)) )
-      !
-      ! Coordinates for nodes g1 to g1-1+nfnods of the ghost cell have already
-      ! been defined so we need to define nodes g1+nfnods to g2.
-      !
-      if (host_geom == 3) then
-        !
-        ! Ghost node 3 for triangle
-        !
-        ni = nodes_of_cell( h1 + mod(host_side+1,host_geom) )
-        ng = nodes_of_cell( g1 + 2 )
-        !
-        ! Store the coordinates for node ni
-        !
-        xyz_ni(:) = xyz_nodes(:,ni)
-        !
-        ! Get the coordinates of ghost node 3
-        !
-        xyz_nodes(:,ng) = merge(rotate(xyz_h1(:),xyz_h2(:),xyz_ni(:)), &
-                                reflect(xyz_ni(:),ptf,rnrm), &
-                                rotation == 1)
-        !
-      else if (host_geom == 4) then
-        !
-        ! Ghost node 3 for quadrilateral
-        !
-        ng = nodes_of_cell( g1 + 2 )
-        ni = nodes_of_cell( h1 + &
-                            mod(host_side+2-max(0,min(1,rotation)),host_geom) )
-        !
-        ! Store the coordinates for node ni
-        !
-        xyz_ni(:) = xyz_nodes(:,ni)
-        !
-        ! Get the coordinates of ghost node 3
-        !
-        xyz_nodes(:,ng) = merge(rotate(xyz_h1(:),xyz_h2(:),xyz_ni(:)), &
-                                reflect(xyz_ni(:),ptf,rnrm), &
-                                rotation == 1)
-        !
-        ! Ghost node 4 for quadrilateral
-        !
-        ng = nodes_of_cell( g1 + 3 )
-        ni = nodes_of_cell( h1 + &
-                            mod(host_side+1+max(0,min(1,rotation)),host_geom) )
-        !
-        ! Store the coordinates for node ni
-        !
-        xyz_ni(:) = xyz_nodes(:,ni)
-        !
-        ! Get the coordinates of ghost node 4
-        !
-        xyz_nodes(:,ng) = merge(rotate(xyz_h1(:),xyz_h2(:),xyz_ni(:)), &
-                                reflect(xyz_ni(:),ptf,rnrm), &
-                                rotation == 1)
-        !
-      end if
-      !
-    else
-      !
-      ! This is a periodic boundary face
-      !
-      ! Boundary face linked to this periodic boundary face
-      !
-      pf = bface(5,nf)
-      !
-      ! Linked cell and the corresponding node indices
-      !
-      periodic_cell = bface(2,pf)
-      !
-      p1 = nodes_of_cell_ptr(periodic_cell)+1
-      p2 = nodes_of_cell_ptr(periodic_cell+1)
-      !
-      ! Information about the linked face
-      !
-      periodic_geom = bface(3,pf)
-      periodic_side = bface(4,pf)
-      !
-      ! Check that the face geometry matches across this periodic boundary
-      !
-      if (num_face_nodes(periodic_side,periodic_geom) /= nfnods) then
-        write (error_message,101)
-        call stop_gfr(stop_mpi,pname,__LINE__,__FILE__,error_message)
-      end if
-      !
-      ! Get the number of nodes defining the periodic cell
-      !
-      pcnods = geom_nodes(periodic_geom)
-      !
-      ! Node coordinates for periodic cell
-      !
-      periodic_nodes(1:nr,1:pcnods) = xyz_nodes(1:nr,nodes_of_cell(p1:p2))
-      !
-      ! Node offsets for this face of the periodic cell
-      !
-      periodic_ip(1:nfnods) = side_nodes(1:nfnods,periodic_side,periodic_geom)
-      !
-      ! Use the node offsets to get the actual indices for these nodes
-      !
-      pface_nodes(1:nfnods) = nodes_of_cell( p1 + periodic_ip(1:nfnods) )
-      !
-      ! Outward unit normal to boundary face.
-      !
-      pnrm = face_normal( xyz_nodes(1:nr,pface_nodes(1:nfnods)) )
-      pnrm = unit_vector( pnrm )
-      !
-      ! Center of boundary face for periodic_cell
-      !
-      ptf(1:nr) = node_center( xyz_nodes(1:nr,pface_nodes(1:nfnods)) )
-      !
-      ! Nodes on the boundary face for periodic_cell
-      ! NOTE: NOW STORED IN pface_nodes(1:nfnods)
-      !
-      ! Nodes on the boundary face for host_cell
-      ! NOTE: NOW STORED IN face_nodes(1:nfnods)
-      !
-      ! ########################################################################
-      ! ########################################################################
-      ! ########################################################################
-      ! ##############  ||||||||||                   ||||||||||  ###############
-      ! ##############  VVVVVVVVVV  NEED TO WORK ON  VVVVVVVVVV  ###############
-      ! ########################################################################
-      ! ########################################################################
-      ! ########################################################################
-      !
-      ! Get the angle between the two outward unit normals
-      !
-      theta = acos(dot(pnrm,rnrm))
-      ! NEED ANOTHER ANGLE FOR 3D !!!!!!
-      !
-      ! Translation of the periodic_cell nodes so that ptf is at the origin
-      !
-      do i = 1,pcnods
-        periodic_nodes(1:nr,i) = periodic_nodes(1:nr,i) - ptf(1:nr)
-      end do
-      !
-      ! Rotate the nodes of periodic_cell about ptf theta+180 degrees
-      !
-      do i = 1,pcnods
-        periodic_nodes(1:nr,i) = rotate_2d( periodic_nodes(1:nr,i) , theta+pi )
-      end do
-      !
-      ! Translation of the periodic_cell nodes back to original ptf
-      !
-      do i = 1,pcnods
-        periodic_nodes(1:nr,i) = periodic_nodes(1:nr,i) + ptf(1:nr)
-      end do
-      !
-      ! Find the distances between the two corresponding nodes of
-      ! the two boundary faces. The two boundary faces should now be
-      ! parallel to each other but with opposite outward unit normals
-      ! and therefore the distances should be equal.
-      !
-     !ds1(:) = xyz_nodes(:,ni1) - periodic_nodes(:,1+mod(periodic_side,pcnods))
-     !ds2(:) = xyz_nodes(:,ni2) - periodic_nodes(:,periodic_side)
-     !!
-     !if (abs(ds1(1)-ds2(1))>eps6 .or. abs(ds1(2)-ds2(2))>eps6) then
-     !  write (*,1) host_cell,periodic_cell,abs(ds1-ds2)
-     !end if
-     !!
-     !! Move the interior nodes of periodic_cell to the ghost nodes of host_cell
-     !!
-     !do i = nfnods+1,pcnods
-     !  !
-     !  ng = nodes_of_cell( g1 + i-1 )
-     !  np = nodes_of_cell( p1 + mod(periodic_side+i-2,pcnods) )
-     !  !
-     !  xyz_nodes(:,ng) = xyz_nodes(:,np) + ds1(:)
-     !  !
-     !end do
-      !
-      ! ########################################################################
-      ! ########################################################################
-      ! ########################################################################
-      ! ##############  AAAAAAAAAA  NEED TO WORK ON  AAAAAAAAAA  ###############
-      ! ##############  ||||||||||                   ||||||||||  ###############
-      ! ########################################################################
-      ! ########################################################################
-      ! ########################################################################
-      !
-    end if
-    !
-  end do
-  !
-  ! If using multiple processors, save the global grid arrays
-  !
-  call save_global_grid
-  !
-  call debug_timer(leaving_procedure,pname)
-  !
-  1 format ("HOSTCELL = ",i0,"  PCELL = ",i0,"   (delta x,delta y) = ",2es24.11)
-  2 format (/," ********************* WARNING!!! *********************",/, &
-              "  IT APPEARS THE FINAL TIME DOES NOT CORRESPOND TO THE",/, &
-              "  EXACT END OF A PERIOD FOR THE VORTEX PROBLEM. THE",/, &
-              "  FINAL TIME CORRESPONDS TO",f12.5," TOTAL PERIODS.",/, &
-              " ********************* WARNING!!! *********************",/)
-  100 format ("Not sure what nodes to use for the ghost cell based on ", &
-              "the host cell geometry encountered.")
-  101 format ("The face geometry across a periodic boundary does not match!")
-  !
-end subroutine adjust_for_same_dimension_ghost_cells
+! NOTE: This subroutine is never called.
+! subroutine adjust_for_same_dimension_ghost_cells()
+!   !
+!   ! Routine to make some adjustments to the data from the grid file
+!   ! to account for ghost cells and new nodes associated with them
+!   !
+!   !.. Use Statements ..
+!   use geovar, only : nr,ncell,nfbnd,nnode,n_totcel,n_totnod
+!   use geovar, only : bface,nodes_of_cell_ptr,nodes_of_cell,xyz_nodes
+!   use geovar, only : cell_geom,cell_order
+!   use ovar,   only : Grid_Min,Grid_Max,Grid_Length
+!   !
+!   !.. Local Scalars ..
+!   integer  :: g1,g2,i,h1,h2,nf,ng,ni,np
+!   integer  :: ghost_cell,host_cell,host_geom,inode,host_side
+!   integer  :: pf,p1,p2
+!   integer  :: ni1,ni2,ierr
+!   integer  :: periodic_cell,periodic_geom,periodic_side,pcnods
+!   real(wp) :: theta
+!   integer :: nfnods
+!   !
+!   !.. Local Arrays ..
+!   integer,  dimension(1:4)      :: ip,periodic_ip
+!   integer,  dimension(1:4)      :: face_nodes
+!   integer,  dimension(1:4)      :: pface_nodes
+!   real(wp), dimension(1:nr)     :: ptf
+!   real(wp), dimension(1:nr)     :: xyz_h1
+!   real(wp), dimension(1:nr)     :: xyz_h2
+!   real(wp), dimension(1:nr)     :: xyz_ni
+!   real(wp), dimension(1:nr)     :: ds,ds1,ds2
+!   real(wp), dimension(1:nr)     :: rnrm,pnrm
+!   real(wp), dimension(1:nr,1:8) :: periodic_nodes
+!   !
+!   !.. Local Parameters ..
+!   character(len=*), parameter :: pname = "adjust_for_same_dimension_ghost_cells"
+!   !
+!   integer, parameter :: rotation = 0
+!   !
+! continue
+!   !
+!   call debug_timer(entering_procedure,pname)
+!   !
+!   ! Before we start adding ghost cells, lets get the extents of the grid domain
+!   ! NOTE: ASSUME GRID BOUNDARIES OF CONSTANT X AND Y
+!   !
+!   Grid_Min = zero
+!   Grid_Max = zero
+!   !
+!   Grid_Min(1:nr) = minval(xyz_nodes(1:nr,:),dim=2)
+!   Grid_Max(1:nr) = maxval(xyz_nodes(1:nr,:),dim=2)
+!   Grid_Length = Grid_Max - Grid_Min
+!   !
+!   ! #######
+!   ! ## 1 ##
+!   ! #######
+!   !
+!   ! Total number of interior plus ghost cells
+!   !
+!   n_totcel = ncell + nfbnd
+!   !
+!   ! Reallocate nodes_of_cell_ptr to account for ghost cells
+!   !
+!   call reallocate( nodes_of_cell_ptr , n_totcel+1 )
+!   !
+!   ! Set the number of nodes for each ghost cell
+!   !
+!   do nf = 1,nfbnd
+!     !
+!     if (bface(1,nf) /= bc_periodic) then
+!       !
+!       ! Not a periodic boundary, number of nodes is the same as interior
+!       !
+!       inode = geom_nodes( bface(3,nf) )
+!       !
+!     else
+!       !
+!       ! Periodic boundary, get the number of
+!       ! nodes for the connected periodic cell
+!       !
+!       pf = bface(5,nf)
+!       !
+!       inode = geom_nodes( bface(3,pf) )
+!       !
+!     end if
+!     !
+!     nodes_of_cell_ptr(ncell+nf+1) = inode
+!     !
+!   end do
+!   !
+!   ! Reshuffle the ghost cell portion of nodes_of_cell_ptr
+!   !
+!   do i = ncell+2,size(nodes_of_cell_ptr)
+!     nodes_of_cell_ptr(i) = nodes_of_cell_ptr(i) + nodes_of_cell_ptr(i-1)
+!   end do
+!   !
+!   ! #######
+!   ! ## 2 ##
+!   ! #######
+!   !
+!   ! Reallocate nodes_of_cell to account for ghost cells
+!   !
+!   call reallocate( nodes_of_cell , last(nodes_of_cell_ptr) )
+!   !
+!   ! Loop over the boundary faces and find the nodes of each ghost cell.
+!   ! The first two nodes are on the boundary face while the other nodes
+!   ! are newly created and to be defined in step 3. The nodes are in
+!   ! counter-clockwise ordering.
+!   !
+!   inode = nnode
+!   !
+!   do nf = 1,nfbnd
+!     !
+!     ghost_cell = nf + ncell
+!     !
+!     ! Node indices for the ghost cell
+!     !
+!     g1 = nodes_of_cell_ptr(ghost_cell)+1
+!     g2 = nodes_of_cell_ptr(ghost_cell+1)
+!     !
+!     ! Information about boundary face
+!     !
+!     host_cell = bface(2,nf)
+!     host_geom = bface(3,nf)
+!     host_side = bface(4,nf)
+!     !
+!     ! Starting node index for the interior cell
+!     !
+!     h1 = nodes_of_cell_ptr(host_cell)+1
+!     !
+!     ! Get the number of nodes defining this face
+!     !
+!     nfnods = num_face_nodes(host_side,host_geom)
+!     !
+!     ! Node offsets for this face of the host cell
+!     !
+!     ip(1:nfnods) = side_nodes(1:nfnods,host_side,host_geom)
+!     !
+!     ! Use the node offsets to get the actual indices for these nodes
+!     !
+!     face_nodes(1:nfnods) = nodes_of_cell( h1 + ip(1:nfnods) )
+!     !
+!     ! Copy the face node indices into their correct locations for the ghost cell
+!     !
+!     nodes_of_cell(g1:g2) = ghost_nodes(face_nodes(1:nfnods),host_geom,host_side)
+!    !!
+!    !! Assign nodes defining boundary face from the host cell to the ghost cell
+!    !! NOTE: We have to reverse the rotation/ordering of the face nodes so that
+!    !!       the nodes of the ghost cell are defined such that the normal of
+!    !!       each of its faces points outwards (this is the same as the interior
+!    !!       cells). For a 2D host cell, there are only two nodes so we just
+!    !!       need to switch them, i.e. node1 <=> node2.  For a 3D host cell,
+!    !!       switching either nodes 1 & 3 or nodes 3 & 4 will do the trick.
+!    !!       Since triangle faces only have three nodes, we will switch nodes
+!    !!       1 & 3 for both triangle and quad faces so that we dont have to
+!    !!       distinguish between the two.
+!    !!
+!    !! Copy over the face nodes to the ghost cell,
+!    !! keeping the same ordering as the host cell.
+!    !!
+!    !nodes_of_cell(g1:g1-1+nfnods) = face_nodes(1:nfnods)
+!    !!
+!    !! Get the index of the node to switch with node 1.
+!    !! NOTE: switch_index = nfnods (i.e. 2) for a 2D host cell
+!    !!       switch_index = nfnods (i.e. 3) for a triangular boundary face
+!    !!       switch_index = 3               for a quadrilateral boundary face
+!    !! ADDITIONAL NOTE: switch_index also evaluates to nfnods (i.e. 1) for
+!    !!                  a 1D host cell which is the correct value if the
+!    !!                  rest of the code is ever set up to run 1D.
+!    !!
+!    !switch_index = min( nfnods , 3 )
+!    !!
+!    !! Switch the two face nodes required to reverse the face node ordering
+!    !!
+!    !nodes_of_cell(g1) = face_nodes(switch_index)
+!    !nodes_of_cell(g1-1+switch_index) = face_nodes(1)
+!     !
+!     if (all(host_geom /= [Geom_1D,Geom_2D,Geom_3D])) then
+!       write (error_message,100)
+!       call stop_gfr(stop_mpi,pname,__LINE__,__FILE__,error_message)
+!     end if
+!     !
+!     ! Create new nodes for the remaining ghost cell nodes
+!     !
+!     do i = g1,g2
+!       if (nodes_of_cell(i) < 0) then
+!         inode = inode + 1
+!         nodes_of_cell(i) = inode
+!       end if
+!     end do
+!     !
+!   end do
+!   !
+!   ! Total number of nodes after the addition of
+!   ! the newly created nodes for the ghost cells
+!   !
+!   n_totnod = inode
+!   !
+!   ! #######
+!   ! ## 3 ##
+!   ! #######
+!   !
+!   ! Reallocate cell_geom to account for ghost cells
+!   !
+!   call reallocate( cell_geom , n_totcel )
+!   !
+!   ! Reallocate cell_order to account for ghost cells
+!   !
+!   call reallocate( cell_order , n_totcel )
+!   !
+!   ! Fill in the information for the ghost cells
+!   !
+!   do nf = 1,nfbnd
+!     cell_geom(nf+ncell) = cell_geom(bface(2,nf))
+!     cell_order(nf+ncell) = cell_order(bface(2,nf))
+!   end do
+!   !
+!   ! #######
+!   ! ## 4 ##
+!   ! #######
+!   !
+!   ! Reallocate xyz_nodes to account for ghost nodes
+!   !
+!   call reallocate( xyz_nodes , new_size2=n_totnod )
+!   !
+!   ! Loop over boundary faces to compute the
+!   ! coordinates of the newly created ghost nodes
+!   !
+!   do nf = 1,nfbnd
+!     !
+!     ! Ghost cell and the corresponding node indices
+!     !
+!     ghost_cell = nf + ncell
+!     !
+!     g1 = nodes_of_cell_ptr(ghost_cell)+1
+!     g2 = nodes_of_cell_ptr(ghost_cell+1)
+!     !
+!     ! Interior cell and the corresponding node indices
+!     !
+!     host_cell = bface(2,nf)
+!     !
+!     h1 = nodes_of_cell_ptr(host_cell)+1
+!     h2 = nodes_of_cell_ptr(host_cell+1)
+!     !
+!     ! Information about boundary face
+!     !
+!     host_geom = bface(3,nf)
+!     host_side = bface(4,nf)
+!     !
+!     ! Get the number of nodes defining this face
+!     !
+!     nfnods = num_face_nodes(host_side,host_geom)
+!     !
+!     ! Node offsets for this face of the host cell
+!     !
+!     ip(1:nfnods) = side_nodes(1:nfnods,host_side,host_geom)
+!     !
+!     ! Use the node offsets to get the actual indices for these nodes
+!     !
+!     face_nodes(1:nfnods) = nodes_of_cell( h1 + ip(1:nfnods) )
+!     !
+!     ! Outward unit normal to boundary face.
+!     !
+!     rnrm = face_normal( xyz_nodes(1:nr,face_nodes(1:nfnods)) )
+!     rnrm = unit_vector( rnrm )
+!     !
+!     ! Store the coordinates for the first and last node of the cell
+!     !
+!     xyz_h1(:) = xyz_nodes(:,h1)
+!     xyz_h2(:) = xyz_nodes(:,h2)
+!     !
+!     ! Conditional to treat periodic boundary conditions separately
+!     !
+!     if (bface(1,nf) /= bc_periodic) then
+!       !
+!       ! This is not a periodic boundary face
+!       !
+!       ! Center of boundary face by averaging the
+!       ! coordinates of the two boundary nodes
+!       !
+!       ptf(1:nr) = node_center( xyz_nodes(1:nr,face_nodes(1:nfnods)) )
+!       !
+!       ! Coordinates for nodes g1 to g1-1+nfnods of the ghost cell have already
+!       ! been defined so we need to define nodes g1+nfnods to g2.
+!       !
+!       if (host_geom == 3) then
+!         !
+!         ! Ghost node 3 for triangle
+!         !
+!         ni = nodes_of_cell( h1 + mod(host_side+1,host_geom) )
+!         ng = nodes_of_cell( g1 + 2 )
+!         !
+!         ! Store the coordinates for node ni
+!         !
+!         xyz_ni(:) = xyz_nodes(:,ni)
+!         !
+!         ! Get the coordinates of ghost node 3
+!         !
+!         xyz_nodes(:,ng) = merge(rotate(xyz_h1(:),xyz_h2(:),xyz_ni(:)), &
+!                                 reflect(xyz_ni(:),ptf,rnrm), &
+!                                 rotation == 1)
+!         !
+!       else if (host_geom == 4) then
+!         !
+!         ! Ghost node 3 for quadrilateral
+!         !
+!         ng = nodes_of_cell( g1 + 2 )
+!         ni = nodes_of_cell( h1 + &
+!                             mod(host_side+2-max(0,min(1,rotation)),host_geom) )
+!         !
+!         ! Store the coordinates for node ni
+!         !
+!         xyz_ni(:) = xyz_nodes(:,ni)
+!         !
+!         ! Get the coordinates of ghost node 3
+!         !
+!         xyz_nodes(:,ng) = merge(rotate(xyz_h1(:),xyz_h2(:),xyz_ni(:)), &
+!                                 reflect(xyz_ni(:),ptf,rnrm), &
+!                                 rotation == 1)
+!         !
+!         ! Ghost node 4 for quadrilateral
+!         !
+!         ng = nodes_of_cell( g1 + 3 )
+!         ni = nodes_of_cell( h1 + &
+!                             mod(host_side+1+max(0,min(1,rotation)),host_geom) )
+!         !
+!         ! Store the coordinates for node ni
+!         !
+!         xyz_ni(:) = xyz_nodes(:,ni)
+!         !
+!         ! Get the coordinates of ghost node 4
+!         !
+!         xyz_nodes(:,ng) = merge(rotate(xyz_h1(:),xyz_h2(:),xyz_ni(:)), &
+!                                 reflect(xyz_ni(:),ptf,rnrm), &
+!                                 rotation == 1)
+!         !
+!       end if
+!       !
+!     else
+!       !
+!       ! This is a periodic boundary face
+!       !
+!       ! Boundary face linked to this periodic boundary face
+!       !
+!       pf = bface(5,nf)
+!       !
+!       ! Linked cell and the corresponding node indices
+!       !
+!       periodic_cell = bface(2,pf)
+!       !
+!       p1 = nodes_of_cell_ptr(periodic_cell)+1
+!       p2 = nodes_of_cell_ptr(periodic_cell+1)
+!       !
+!       ! Information about the linked face
+!       !
+!       periodic_geom = bface(3,pf)
+!       periodic_side = bface(4,pf)
+!       !
+!       ! Check that the face geometry matches across this periodic boundary
+!       !
+!       if (num_face_nodes(periodic_side,periodic_geom) /= nfnods) then
+!         write (error_message,101)
+!         call stop_gfr(stop_mpi,pname,__LINE__,__FILE__,error_message)
+!       end if
+!       !
+!       ! Get the number of nodes defining the periodic cell
+!       !
+!       pcnods = geom_nodes(periodic_geom)
+!       !
+!       ! Node coordinates for periodic cell
+!       !
+!       periodic_nodes(1:nr,1:pcnods) = xyz_nodes(1:nr,nodes_of_cell(p1:p2))
+!       !
+!       ! Node offsets for this face of the periodic cell
+!       !
+!       periodic_ip(1:nfnods) = side_nodes(1:nfnods,periodic_side,periodic_geom)
+!       !
+!       ! Use the node offsets to get the actual indices for these nodes
+!       !
+!       pface_nodes(1:nfnods) = nodes_of_cell( p1 + periodic_ip(1:nfnods) )
+!       !
+!       ! Outward unit normal to boundary face.
+!       !
+!       pnrm = face_normal( xyz_nodes(1:nr,pface_nodes(1:nfnods)) )
+!       pnrm = unit_vector( pnrm )
+!       !
+!       ! Center of boundary face for periodic_cell
+!       !
+!       ptf(1:nr) = node_center( xyz_nodes(1:nr,pface_nodes(1:nfnods)) )
+!       !
+!       ! Nodes on the boundary face for periodic_cell
+!       ! NOTE: NOW STORED IN pface_nodes(1:nfnods)
+!       !
+!       ! Nodes on the boundary face for host_cell
+!       ! NOTE: NOW STORED IN face_nodes(1:nfnods)
+!       !
+!       ! ########################################################################
+!       ! ########################################################################
+!       ! ########################################################################
+!       ! ##############  ||||||||||                   ||||||||||  ###############
+!       ! ##############  VVVVVVVVVV  NEED TO WORK ON  VVVVVVVVVV  ###############
+!       ! ########################################################################
+!       ! ########################################################################
+!       ! ########################################################################
+!       !
+!       ! Get the angle between the two outward unit normals
+!       !
+!       theta = acos(dot(pnrm,rnrm))
+!       ! NEED ANOTHER ANGLE FOR 3D !!!!!!
+!       !
+!       ! Translation of the periodic_cell nodes so that ptf is at the origin
+!       !
+!       do i = 1,pcnods
+!         periodic_nodes(1:nr,i) = periodic_nodes(1:nr,i) - ptf(1:nr)
+!       end do
+!       !
+!       ! Rotate the nodes of periodic_cell about ptf theta+180 degrees
+!       !
+!       do i = 1,pcnods
+!         periodic_nodes(1:nr,i) = rotate_2d( periodic_nodes(1:nr,i) , theta+pi )
+!       end do
+!       !
+!       ! Translation of the periodic_cell nodes back to original ptf
+!       !
+!       do i = 1,pcnods
+!         periodic_nodes(1:nr,i) = periodic_nodes(1:nr,i) + ptf(1:nr)
+!       end do
+!       !
+!       ! Find the distances between the two corresponding nodes of
+!       ! the two boundary faces. The two boundary faces should now be
+!       ! parallel to each other but with opposite outward unit normals
+!       ! and therefore the distances should be equal.
+!       !
+!      !ds1(:) = xyz_nodes(:,ni1) - periodic_nodes(:,1+mod(periodic_side,pcnods))
+!      !ds2(:) = xyz_nodes(:,ni2) - periodic_nodes(:,periodic_side)
+!      !!
+!      !if (abs(ds1(1)-ds2(1))>eps6 .or. abs(ds1(2)-ds2(2))>eps6) then
+!      !  write (*,1) host_cell,periodic_cell,abs(ds1-ds2)
+!      !end if
+!      !!
+!      !! Move the interior nodes of periodic_cell to the ghost nodes of host_cell
+!      !!
+!      !do i = nfnods+1,pcnods
+!      !  !
+!      !  ng = nodes_of_cell( g1 + i-1 )
+!      !  np = nodes_of_cell( p1 + mod(periodic_side+i-2,pcnods) )
+!      !  !
+!      !  xyz_nodes(:,ng) = xyz_nodes(:,np) + ds1(:)
+!      !  !
+!      !end do
+!       !
+!       ! ########################################################################
+!       ! ########################################################################
+!       ! ########################################################################
+!       ! ##############  AAAAAAAAAA  NEED TO WORK ON  AAAAAAAAAA  ###############
+!       ! ##############  ||||||||||                   ||||||||||  ###############
+!       ! ########################################################################
+!       ! ########################################################################
+!       ! ########################################################################
+!       !
+!     end if
+!     !
+!   end do
+!   !
+!   ! If using multiple processors, save the global grid arrays
+!   !
+!   call save_global_grid
+!   !
+!   call debug_timer(leaving_procedure,pname)
+!   !
+!   1 format ("HOSTCELL = ",i0,"  PCELL = ",i0,"   (delta x,delta y) = ",2es24.11)
+!   2 format (/," ********************* WARNING!!! *********************",/, &
+!               "  IT APPEARS THE FINAL TIME DOES NOT CORRESPOND TO THE",/, &
+!               "  EXACT END OF A PERIOD FOR THE VORTEX PROBLEM. THE",/, &
+!               "  FINAL TIME CORRESPONDS TO",f12.5," TOTAL PERIODS.",/, &
+!               " ********************* WARNING!!! *********************",/)
+!   100 format ("Not sure what nodes to use for the ghost cell based on ", &
+!               "the host cell geometry encountered.")
+!   101 format ("The face geometry across a periodic boundary does not match!")
+!   !
+! end subroutine adjust_for_same_dimension_ghost_cells
 !
 !###############################################################################
 !
@@ -4981,7 +3230,7 @@ continue
       !
     end do
     !
-    if (bface(1,nf) == bc_periodic) then
+    if( any( bface(1,nf) == bc_periodic_list ) ) then
       !
       right_cell = face(bface(5,nf))%left%cell
       !
@@ -5084,7 +3333,7 @@ continue
     !
     face_string = ""
     if (nf < nfbnd) then
-      if (bface(1,nf) == bc_periodic) then
+      if( any( bface(1,nf) == bc_periodic_list ) ) then
         face_string = "(periodic face)"
       else if (bface(1,nf) == bc_cpu_bnd) then
         face_string = "(cpu boundary)"
@@ -5236,7 +3485,7 @@ continue
     !
     nfp = geom_solpts(face_geom,face_order)
     !
-    if (bface(1,nf) == bc_periodic) then
+    if( any( bface(1,nf) == bc_periodic_list ) ) then
       !
       pf = bface(5,nf)
       !
@@ -5271,7 +3520,7 @@ continue
     !
     face_string = ""
     if (nf < nfbnd) then
-      if (bface(1,nf) == bc_periodic) then
+      if( any( bface(1,nf) == bc_periodic_list ) ) then
         face_string = "(periodic face)"
       else if (bface(1,nf) == bc_cpu_bnd) then
         face_string = "(cpu boundary)"

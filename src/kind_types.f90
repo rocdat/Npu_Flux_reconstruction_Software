@@ -431,12 +431,17 @@ module module_kind_types
   ! Other BCs
   integer, parameter :: not_a_bc = 0
   integer, parameter :: bc_symmetry = 80
-  integer, parameter :: bc_periodic = 81
+  ! [-89,-81], [81,89] are reserved for periodic BCs
+  ! Usually we will not use [89,-89]. So let bc_periodic_list(0) = -89 to
+  ! avoid possible interferences.
+  integer, private :: ac_i
+  integer, parameter :: bc_periodic_list(-9:9) = &
+    [(ac_i,ac_i=-89,-81),-89,(ac_i,ac_i=81,89)]
   integer, parameter :: bc_cpu_bnd = 99
   integer, parameter :: bc_unsupported = -9998
   integer, parameter :: bc_unknown = -9999
   ! BC Groups
-  integer, parameter :: bc_comm(1:2) = [bc_periodic,bc_cpu_bnd]
+  integer, parameter :: bc_comm(1:20) = [bc_periodic_list,bc_cpu_bnd]
   integer, parameter :: bc_walls(1:5) = [ bc_slip_wall, &
                                           bc_euler_wall, &
                                           bc_symmetry, &

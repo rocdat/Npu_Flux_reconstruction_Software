@@ -36,7 +36,7 @@ module geovar
   ! nbfai : number of storage locations needed for
   !         each boundary face in array bface
   !
-  integer, parameter, public :: nbfai = 10
+  integer, parameter, public :: nbfai = 11
   !
   ! nr    : number of dimensions for computation
   ! nnode : total number of grid nodes
@@ -85,6 +85,8 @@ module geovar
   ! xyz_fp : x,y,z coordinates of the flux points
   real(wp), public, save, allocatable, dimension(:,:) :: xyz_fp
   !
+  ! 
+  ! integer, public, save, allocatable, dimension(:,:) :: pdc_faces_idx
   ! Grid size parameters for global grid
   !
   integer, public, save :: n_global_node
@@ -130,7 +132,11 @@ module geovar
   !                         condition group to which i_face belongs. This is
   !                         used to group together boundary faces for analysis
   !                         during the output/post-processing parts of the
-  !                         simulation.
+  !                         simulation. ! Let us drop out this feature. I think
+  !                         bface(5,:) should be consistent in its meaning
+  !                         which should be its linked face. For non-periodic
+  !                         BC, bface(5,:) has a default negative value. For
+  !                         periodic BC, do as the following says.
   !                      B) For a periodic or partition boundary face i_face
   !                         with host cell i_cell, this gives the boundary
   !                         face j_face that links to i_face. To find host cell
@@ -165,6 +171,9 @@ module geovar
   !                            faces can connect to the same cell on an adjacent
   !                            partition and therefore connect to the same ghost
   !                            cell.
+  !        bface(11,:) = For a non-communication (i.e., physical boundary)
+  !                      boundary face i_face, this gives the boundary
+  !                      condition group to which i_face belongs.
   !
   integer, public, save, allocatable, dimension(:,:) :: bface
   !
