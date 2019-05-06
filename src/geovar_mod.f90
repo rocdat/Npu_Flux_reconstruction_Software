@@ -85,8 +85,6 @@ module geovar
   ! xyz_fp : x,y,z coordinates of the flux points
   real(wp), public, save, allocatable, dimension(:,:) :: xyz_fp
   !
-  ! 
-  ! integer, public, save, allocatable, dimension(:,:) :: pdc_faces_idx
   ! Grid size parameters for global grid
   !
   integer, public, save :: n_global_node
@@ -132,7 +130,7 @@ module geovar
   !                         condition group to which i_face belongs. This is
   !                         used to group together boundary faces for analysis
   !                         during the output/post-processing parts of the
-  !                         simulation. ! Let us drop out this feature. I think
+  !                         simulation. Let us drop out this feature. I think
   !                         bface(5,:) should be consistent in its meaning
   !                         which should be its linked face. For non-periodic
   !                         BC, bface(5,:) has a default negative value. For

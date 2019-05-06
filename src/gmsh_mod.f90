@@ -1856,9 +1856,8 @@ continue
       bface( 1,nf) = phys_grps(np)%ibc       ! face boundary condition
       bface( 2,nf) = host_cell                      ! host cell of boundary face
       bface( 3,nf) = grid%elem(host_cell)%prop%geom ! host cell geometry
-      bface( 5,nf) = i                       ! group for boundary face
       bface(10,nf) = ncell + nf              ! ghost cell of boundary face
-      ! bface(11,nf) = i                       ! group for boundary face
+      bface(11,nf) = i                       ! group for boundary face
       !
       host_cell = bface(2,nf) ! host cell of boundary face
       host_geom = bface(3,nf) ! geometry of host cell

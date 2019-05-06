@@ -1723,15 +1723,6 @@ continue
   bc_in(0)%pv = pv(:) ! Using F2003 auto-reallocation
   bc_in(0)%cv = cv(:) ! Using F2003 auto-reallocation
   !
-  ! Allocate memeory for the periodic faces index array
-  ! allocate(pdc_faces_idx(size(bface,dim=1),2),source=-1,stat=ierr, &
-  !   errmsg=error_message)
-  ! call alloc_error(pname,"pdc_faces_idx",1,__LINE__,__FILE__,ierr, &
-  !   error_message)
-  !
-  ! Init the index of the periodic face group
-  ! ipdc = 1
-  !
   ! Set the other boundary conditions
   nbc_loop: do i = 1,nbc
     !
@@ -2007,13 +1998,6 @@ continue
         ! Force the boundary condition to that specified in the input file
         bface(1,nf) = bc_in(i)%bc_type
         !
-        ! if ( bface(1,nf) == bc_periodic ) then
-        !   !
-        !   ! pdc_nf = pdc_nf + 1
-        !   pdc_faces_idx(ii,ipdc) = nf
-        !   !
-        ! end if
-        !
       end if
       !
     end do bface_loop
@@ -2025,41 +2009,7 @@ continue
       write (iout,6) ii
     end if
     !
-    ! if ( pdc_faces_idx(1,ipdc) > 0 ) then
-    !   !
-    !   ! pdc_faces_idx(1,ipdc) is modified. So this group of bnd faces are
-    !   ! periodic faces.
-    !   ! Increate ipdc to next value.
-    !   ipdc = ipdc + 1
-    !   !
-    ! end if
-    !
   end do nbc_loop
-  !
-  ! Collect ipdc as a flag
-  ! call mpi_allreduce(MPI_IN_PLACE,ipdc,1_int_mpi,mpi_inttyp,MPI_SUM, &
-  !   MPI_COMM_WORLD,mpierr)
-  ! ipdc = ipdc - ncpu
-  ! !
-  ! if ( ipdc > 0 ) then
-  !   !
-  !   if ( modulo(ipdc,2) == 1 ) then
-  !     ! Number of periodic face group is odd. Error.
-  !     call stop_gfr(stop_mpi,pname,__LINE__,__FILE__, &
-  !       "Periodic BCs must be a pair")
-  !     !
-  !   else if ( modulo(ipdc,2) == 0 ) then
-  !     !
-  !     ! Number of periodic face group is even. Correct.
-  !     ! By using modulo, we allow multiple pairs of periodic face groups.
-  !     ! Now, collect pdc_faces_idx
-  !     !
-  !   end if
-  !   !
-  ! end if
-  ! !
-  ! ! Shrink the size of pdc_faces_idx
-  ! call reallocate(pdc_faces_idx,,2)
   !
   if (ncpu > 1) then
     if (mypnum == glb_root) flush (iout)

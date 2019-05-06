@@ -3457,8 +3457,7 @@ continue
     nf_prdc_list(ibc) = count( bface(1,:) == bc_periodic_list(ibc) )
     !
     if ( nf_prdc_list(ibc) > 0 ) then
-      !
-      ! allocate(prdc_idxf(ibc)%idxf())
+      ! F2003 Auto Reallocation
       prdc_idxf(ibc)%idxf = pack( [(i,i=1,nfbnd)], bface(1,:) == bc_periodic_list(ibc) )
       !
     end if
@@ -3531,6 +3530,40 @@ continue
     end if
     !
   end do
+  !
+  ! Deallocate all local arrays
+  deallocate(nf_prdc_list,stat=ierr,errmsg=error_message)
+  call alloc_error(pname,"nf_prdc_list",2,__LINE__,__FILE__,ierr,error_message)
+  ! 
+  do ibc = -nbc_prdc,nbc_prdc
+    !
+    if ( allocated( prdc_idxf(ibc)%idxf ) ) then
+      !
+      deallocate(prdc_idxf(ibc)%idxf,stat=ierr,errmsg=error_message)
+      call alloc_error(pname,"prdc_idxf(ibc)%idxf",2,__LINE__,__FILE__,ierr, &
+        error_message)
+      !
+    end if
+    !
+  end do
+  !
+  deallocate(prdc_idxf,stat=ierr,errmsg=error_message)
+  call alloc_error(pname,"prdc_idxf",2,__LINE__,__FILE__,ierr,error_message)
+  ! 
+  do ibc = -nbc_prdc,nbc_prdc
+    !
+    if ( allocated( prdc_xyz(ibc)%xyz ) ) then
+      !
+      deallocate(prdc_xyz(ibc)%xyz,stat=ierr,errmsg=error_message)
+      call alloc_error(pname,"prdc_xyz(ibc)%xyz",2,__LINE__,__FILE__,ierr, &
+        error_message)
+      !
+    end if
+    !
+  end do
+  !
+  deallocate(prdc_xyz,stat=ierr,errmsg=error_message)
+  call alloc_error(pname,"prdc_xyz",2,__LINE__,__FILE__,ierr,error_message)
   !
   call debug_timer(leaving_procedure,pname)
   !
