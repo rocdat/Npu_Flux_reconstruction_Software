@@ -1673,31 +1673,31 @@ continue
   ! bface(1,:) contains all BCs specified in the gmsh file.
   ! If BCs are specified in the input file, nbc should match the number of BCs
   ! in bface(1,:).
-  if ( grid_format == Gmsh_Format ) then
-    !
-    ! Only check when the input file provides BCs. This means that if you
-    ! provide BCs in the input file, do provide all BCs. Providing just one
-    ! of all BCs is prohibited.
-    if ( nbc > 0 ) then
-      !
-      i = maxval(bface(1,:)) - minval(bface(1,:)) + 1
-      !
-      ! Check if the BC ID is consecutive.
-      do ii = minval(bface(1,:)), maxval(bface(1,:))
-        if ( all(bface(1,:) /= ii) ) then
-          i = i - 1
-        end if
-      end do
-      !
-      ! bc_input has different number of BCs from bface(1,:)
-      if ( nbc < i ) then
-        write(error_message,7) i,nbc
-        call stop_gfr(stop_mpi,pname,__LINE__,__FILE__,error_message)
-      end if
-      !
-    end if
-    !
-  end if
+  ! if ( grid_format == Gmsh_Format ) then
+  !   !
+  !   ! Only check when the input file provides BCs. This means that if you
+  !   ! provide BCs in the input file, do provide all BCs. Providing just one
+  !   ! of all BCs is prohibited.
+  !   if ( nbc > 0 ) then
+  !     !
+  !     i = maxval(bface(1,:)) - minval(bface(1,:)) + 1
+  !     !
+  !     ! Check if the BC ID is consecutive.
+  !     do ii = minval(bface(1,:)), maxval(bface(1,:))
+  !       if ( all(bface(1,:) /= ii) ) then
+  !         i = i - 1
+  !       end if
+  !     end do
+  !     !
+  !     ! bc_input has different number of BCs from bface(1,:)
+  !     if ( nbc < i ) then
+  !       write(error_message,7) i,nbc
+  !       call stop_gfr(stop_mpi,pname,__LINE__,__FILE__,error_message)
+  !     end if
+  !     !
+  !   end if
+  !   !
+  ! end if
   !
   ! bc_in should be allocated in the plot3d grid reading process. However, for
   ! gmsh format, bc_in is allocated here.
