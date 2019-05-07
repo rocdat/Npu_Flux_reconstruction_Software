@@ -98,7 +98,7 @@ module ovar
   ! Map nf \in [1,nfbnd] to cpbc_nf
   integer, public, save, allocatable :: cpbc_idx_map(:)
   !
-  ! background mesh parameters for custom profile bc
+  ! Background mesh parameters for turbulence generation BC
   type :: tgbc_bg_grid_input_t
     !
     ! nx,ny,nz are the number of cells
@@ -146,16 +146,7 @@ module ovar
   ! GRID INFORMATION
   integer,            public, save :: grid_format = Gmsh_Format
   character(len=150), public, save :: gridfile = ""
-  character(len=150), public, save :: plot3d_cutfile = ""
-  character(len=150), public, save :: plot3d_bcsfile = ""
   real(wp),           public, save :: grid_scaling_factor = 1.0_wp
-  !
-  ! PLOT3D COARSENING OPTIONS
-  integer, public, save :: plot3d_i_stride          = -1
-  integer, public, save :: plot3d_j_stride          = -1
-  integer, public, save :: plot3d_k_stride          = -1
-  integer, public, save :: plot3d_all_strides       = -1
-  integer, public, save :: plot3d_agglomerate_order = -1
   !
   ! BASE FR OPTIONS
   integer, public, save :: flux_divergence     = LagrangePolynomial
@@ -210,7 +201,7 @@ module ovar
   !
   ! INITIALIZATION / TEST CASE
   ! Default value should be none of the test cases.
-  integer, public, save :: itestcase = -1
+  integer, public, save :: itestcase = 1
   !
   ! RESTART OPTIONS
   logical(lk),        public, save :: load_restart_file              = fals
@@ -351,9 +342,6 @@ module ovar
   !
   ! ACTIVATE SPECIAL GRID FOR DEBUGGING THE POSTPROCESSOR
   logical(lk), public, save :: postproc_debug_grid = fals
-  !
-  ! OPTION TO OUTPUT PLOT3D GRID TO TECPLOT IN UNSTRUCTURED FORMAT
-  logical(lk), public, save :: output_plot3d_to_tecplot = fals
   !
   ! OPTION TO OUTPUT BOUNDARY CONDITIONS TO TECPLOT FILE
   logical(lk), public, save :: output_bface_array = fals
@@ -634,10 +622,8 @@ end module ovar
 module input_namelist_mod
   !
   !.. Use Statements ..
-  use ovar,      only : grid_format, gridfile, plot3d_all_strides
-  use ovar,      only : plot3d_i_stride, plot3d_j_stride, plot3d_k_stride
-  use ovar,      only : plot3d_agglomerate_order
-  use ovar,      only : plot3d_cutfile, plot3d_bcsfile, grid_scaling_factor
+  use ovar,      only : grid_format, gridfile
+  use ovar,      only : grid_scaling_factor
   use ovar,      only : loc_solution_pts, loc_flux_pts
   use ovar,      only : loc_triangle_pts, loc_quadrature_pts
   use ovar,      only : flux_divergence, correction_function
@@ -673,7 +659,7 @@ module input_namelist_mod
   use ovar,      only : Filtering_Interval, Limiting_Interval
   use ovar,      only : loc_output_pts, loc_init_pts, loc_error_pts
   use ovar,      only : vortex_bigR, vortex_bigGam
-  use ovar,      only : output_plot3d_to_tecplot, output_bface_array
+  use ovar,      only : output_bface_array
   use ovar,      only : interpolate_before_output_variable
   use ovar,      only : convergence_order_abs_res, convergence_order_max_res
   use ovar,      only : dump_memory_usage,use_bc_conflicts
@@ -712,11 +698,8 @@ module input_namelist_mod
   ! ########################
   !
   ! GRID INFORMATION
-  namelist / input / grid_format, gridfile, plot3d_cutfile, plot3d_bcsfile, &
+  namelist / input / grid_format, gridfile, &
                      grid_scaling_factor
-  ! PLOT3D COARSENING OPTIONS
-  namelist / input / plot3d_i_stride, plot3d_j_stride, plot3d_k_stride, &
-                     plot3d_all_strides, plot3d_agglomerate_order
   ! BASE FR OPTIONS
   namelist / input / solution_order, flux_divergence, correction_function
   ! LOCATION OF SOLUTION, FLUX, AND TRIANGULAR POINTS
@@ -813,8 +796,6 @@ module input_namelist_mod
   namelist / input / dump_fluxes, check_flux_point_coordinates
   ! ACTIVATE SPECIAL GRID FOR DEBUGGING THE POSTPROCESSOR
   namelist / input / postproc_debug_grid
-  ! OPTION TO OUTPUT PLOT3D GRID TO TECPLOT IN UNSTRUCTURED FORMAT
-  namelist / input / output_plot3d_to_tecplot
   ! OPTION TO OUTPUT BOUNDARY CONDITIONS TO TECPLOT FILE
   namelist / input / output_bface_array
   ! INPUT BOUNDARY CONDITIONS

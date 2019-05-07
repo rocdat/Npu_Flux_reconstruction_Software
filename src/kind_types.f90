@@ -583,7 +583,7 @@ module module_kind_types
   ! integer, parameter :: Gambit_Neutral = 1
   integer, parameter :: Gmsh_Format = 1
   ! integer, parameter :: Plot3D_Format = 3
-  integer, parameter :: CGNS_Format = 4
+  integer, parameter :: CGNS_Format = 2
   !
   ! CGNS constants
   integer, parameter :: reopen_CGNS = 2

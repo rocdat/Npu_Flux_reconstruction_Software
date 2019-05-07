@@ -9,8 +9,6 @@ module io_mod
   use ovar,    only : grid_format
   use ovar,    only : gridfile
   use ovar,    only : output_dir
-  use ovar,    only : plot3d_cutfile
-  use ovar,    only : plot3d_bcsfile
   !
   implicit none
   !
@@ -1372,18 +1370,10 @@ continue
   if (grid_format == Gmsh_Format) then
     call read_gmsh_gridfile( gridfile )
   else if (grid_format == CGNS_Format) then
-    ! Drop the support for PLOT3D format. The design of BC is bad. Forcus on
-    ! GMSH format. 2019-04-19, 13:43:54. Jingchang Shi
+    ! Forcus on GMSH format. 2019-04-19, 13:43:54. Jingchang Shi
     call stop_gfr(stop_mpi,pname,__LINE__,__FILE__, &
       'CGNS grid format is not supported for now!')
     call read_cgns_gridfile( gridfile )
-  ! else if (grid_format == Plot3D_Format) then
-  !   ! Drop the support for PLOT3D format. The design of BC is bad. Forcus on
-  !   ! GMSH format. 2019-04-19, 13:43:54. Jingchang Shi
-  !   call stop_gfr(stop_mpi,pname,__LINE__,__FILE__, &
-  !     'PLOT3D grid format is not supported for now!')
-  !   call read_plot3d_gridfile( gridfile , plot3d_cutfile , plot3d_bcsfile )
-  !   !
   end if
   !
   if (.not. allocated(grid)) then
