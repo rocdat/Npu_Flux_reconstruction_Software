@@ -229,11 +229,11 @@ $(OBJDIR)/initialize.o : initialize.f90 \
                $(OBJDIR)/derivatives_mod.o \
                $(FUNDIR)/vortex.f90 \
                $(FUNDIR)/taylor_green.f90 \
-               $(FUNDIR)/smc000_interior_wall_radius.f90 \
-               $(FUNDIR)/arn2_interior_wall_radius.f90 \
                $(FUNDIR)/usp2v.f90 \
                $(FUNDIR)/viscosity.f90 \
-               $(OBJDIR)/math_interpolation.o
+               $(OBJDIR)/math_interpolation.o \
+               $(FUNDIR)/smc000_interior_wall_radius.f90 \
+               $(FUNDIR)/arn2_interior_wall_radius.f90
               #$(OBJDIR)/time_mod.o \
 
 $(OBJDIR)/interpolation_mod.o : interpolation_mod.f90 \
@@ -369,8 +369,8 @@ $(OBJDIR)/parallel.o : parallel.f90 \
              $(OBJDIR)/interpolation_mod.o \
              $(OBJDIR)/connectivity.o \
              $(OBJDIR)/gmsh_mod.o \
-             $(OBJDIR)/cgns_mod.o \
              $(OBJDIR)/kdtree2.o \
+             $(OBJDIR)/cgns_mod.o \
              $(FUNDIR)/cell_solpts.f90 \
              $(FUNDIR)/last.f90 \
              $(SRCDIR)/mpi_defs.h

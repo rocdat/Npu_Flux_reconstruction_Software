@@ -398,9 +398,6 @@ continue
   !
   call get_face_and_edge_point_coordinates
   !
-  ! Initialize the periodic BC. Find the connected bnd faces.
-  ! call init_periodic_faces
-  !
   ! Now facexyz is obtained. Interpolate the input profile to the custom
   ! profile BC boundary.
   call init_custome_profile_bc

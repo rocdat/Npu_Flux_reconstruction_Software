@@ -99,6 +99,7 @@ program GFR_main
   use parallel_mod, only : partition_grid
   use parallel_mod, only : create_serial_cell_map
   use parallel_mod, only : create_serial_face_map
+  use parallel_mod, only : init_periodic_faces
   !
   use module_limiters, only : initialize_limiters
   use module_limiters, only : compute_cell_ave
@@ -195,12 +196,16 @@ continue
   !              connectivities for the partition boundaries
   npart = ncpu
   if (npart > 1) then
+    !
     call partition_grid(npart,metis_option,bface,nodes_of_cell, &
                         nodes_of_cell_ptr,xyz_nodes,cell_geom,cell_order)
     call memory_pause("partitioning the grid","getting the solution points")
+    !
   else
+    !
     call create_serial_cell_map(ncell)
     call memory_pause("getting serial cell map","getting the solution points")
+    !
   end if
   !
   ! Get the coordinates of the solution points within each grid cell
@@ -227,10 +232,15 @@ continue
   call get_flux_points
   call memory_pause("getting the flux points","initializing vandermonde matrices")
   !
+  ! Here use bface, face, xyz_fc to find the periodic faces
+  !
+  call init_periodic_faces(bface)
+  !
   ! Compute the remaining quadrature information
   ! (Vandermonde matrix, stiffness matrix, LIFT / correction function, etc.)
   !
   call mpi_barrier(MPI_COMM_WORLD,mpierr)
+  !
   call init_vandermonde_matrices
   call memory_pause("initializing vandermonde matrices", &
                     "initializing derivative matrices")

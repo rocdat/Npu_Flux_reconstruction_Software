@@ -40,7 +40,8 @@ module parallel_mod
   public :: exch_edge_and_node_solutions
   public :: parallel_memory_usage
   public :: exch_connectivity
- !public :: exchange_modes
+  ! public :: exchange_modes
+  public :: init_periodic_faces
   !
   integer, save :: nr
   !
@@ -2608,6 +2609,190 @@ end subroutine find_partition_boundaries
 !
 !###############################################################################
 !
+subroutine init_periodic_faces(bface)
+  !
+  ! Use Statements
+  use geovar, only : xyz_fc
+  use geovar, only : nfbnd
+  use kdtree2_module, only : kdkind,kdtree2,kdtree2_result
+  use kdtree2_module, only : kdtree2_create,kdtree2_destroy
+  use kdtree2_module, only : kdtree2_n_nearest
+  !
+  ! Formal Arguments
+  integer, allocatable, intent(inout) :: bface(:,:)
+  !
+  ! Local Varaibles
+  integer :: ierr
+  integer :: nbc_prdc,ibc,i
+  ! integer :: n_prdc_pair,nf_prdc_max
+  integer :: n,d
+  real(kdkind), dimension(:,:), allocatable :: data_array
+  real(kdkind), allocatable :: query_vec(:)
+  type(kdtree2), pointer :: tree
+  type(kdtree2_result) :: kd_result(1:1)
+  real(kdkind) :: rv
+  integer :: nalloc, rind
+  !
+  ! Local Types
+  type :: prdc_idxf_t
+    integer, allocatable :: idxf(:)
+  end type prdc_idxf_t
+  !
+  type :: prdc_xyz_t
+    real(wp), allocatable :: xyz(:,:)
+  end type prdc_xyz_t
+  !
+  ! Local Array
+  integer, allocatable :: nf_prdc_list(:)
+  type(prdc_idxf_t), allocatable :: prdc_idxf(:)
+  type(prdc_xyz_t), allocatable :: prdc_xyz(:)
+  !
+  ! Local Parameter
+  character(len=*), parameter :: pname = "init_periodic_faces"
+  !
+continue
+  !
+  call debug_timer(entering_procedure,pname)
+  !
+  ! Loop all bnd faces to find the periodic faces
+  ! Split them into separate groups
+  nbc_prdc = ubound(bc_periodic_list,dim=1)
+  !
+  ! nf_prdc_list stores the number of periodic faces for each periodic BC
+  allocate(nf_prdc_list(-nbc_prdc:nbc_prdc),source=0,stat=ierr, &
+    errmsg=error_message)
+  call alloc_error(pname,"nf_prdc_list",1,__LINE__,__FILE__,ierr, &
+    error_message)
+  !
+  ! prdc_idxf stores the face index of periodic faces for each periodic BC
+  allocate(prdc_idxf(-nbc_prdc:nbc_prdc),stat=ierr, &
+    errmsg=error_message)
+  call alloc_error(pname,"prdc_idxf",1,__LINE__,__FILE__,ierr,error_message)
+  !
+  ! Loop all bc_periodic_list to fill nf_prdc_list and prdc_idxf
+  do ibc = -nbc_prdc,nbc_prdc
+    !
+    nf_prdc_list(ibc) = count( bface(1,:) == bc_periodic_list(ibc) )
+    !
+    if ( nf_prdc_list(ibc) > 0 ) then
+      ! F2003 Auto Reallocation
+      prdc_idxf(ibc)%idxf = pack( [(i,i=1,nfbnd)], bface(1,:) == bc_periodic_list(ibc) )
+      !
+    end if
+    !
+  end do
+  !
+  ! Check if in the same periodic face pair, the number of faces matches each
+  ! other.
+  do ibc = 1,nbc_prdc
+    !
+    if ( nf_prdc_list(ibc) /= nf_prdc_list(-ibc) ) then
+      write(error_message,11) bc_periodic_list( ibc), nf_prdc_list( ibc), &
+                              bc_periodic_list(-ibc), nf_prdc_list(-ibc)
+      call stop_gfr(abort,pname,__LINE__,__FILE__, error_message)
+    end if
+    !
+  end do
+  !
+  ! Count the number of pairs of periodic faces
+  ! n_prdc_pair = count( nf_prdc_list(1:nbc_prdc) > 0 )
+  !
+  ! Create the xyz coordinates array for each pair of periodic faces
+  allocate(prdc_xyz(-nbc_prdc:nbc_prdc),stat=ierr, &
+    errmsg=error_message)
+  call alloc_error(pname,"prdc_xyz",1,__LINE__,__FILE__,ierr, &
+    error_message)
+  !
+  do ibc = -nbc_prdc,nbc_prdc
+    !
+    if ( allocated( prdc_idxf(ibc)%idxf ) ) then
+      !
+      ! idxf is allocated. So this is a periodic face group
+      ! Allocate ths coordinates array for this periodic face group
+      allocate( prdc_xyz(ibc)%xyz( 1:size(xyz_fc,dim=1), 1:nf_prdc_list(ibc) ),&
+        stat=ierr, errmsg=error_message )
+      call alloc_error(pname,"prdc_xyz(ibc)%xyz",1,__LINE__,__FILE__,ierr, &
+        error_message)
+      !
+      ! Get the face center coordinates for the periodic faces
+      do i = 1,nf_prdc_list(ibc)
+        prdc_xyz(ibc)%xyz(:,i) = xyz_fc(:, prdc_idxf(ibc)%idxf(i) )
+      end do
+      !
+    end if
+    !
+  end do
+  !
+  ! Now loop each periodic face pair
+  do ibc = 1,nbc_prdc
+    !
+    if ( allocated( prdc_xyz(ibc)%xyz ) ) then
+      !
+      ! Here we use kd-tree to do the finding.
+      ! Create the kdtree for this periodic face group.
+      tree => kdtree2_create(prdc_xyz(ibc)%xyz, sort=.true., rearrange=.true.)
+      !
+      ! Loop all faces in its corresponding face group
+      do i = 1,size(prdc_xyz(-ibc)%xyz,dim=2)
+        !
+        query_vec = prdc_xyz(-ibc)%xyz(:,i)
+        call kdtree2_n_nearest(tp=tree, qv=query_vec, nn=1, results=kd_result)
+        bface(5,prdc_idxf(-ibc)%idxf(i)) = prdc_idxf(ibc)%idxf(kd_result(1)%idx)
+        bface(5,prdc_idxf(ibc)%idxf(kd_result(1)%idx)) = prdc_idxf(-ibc)%idxf(i)
+        !
+      end do
+      !
+      ! Destroy the kd-tree
+      call kdtree2_destroy(tree)
+      !
+    end if
+    !
+  end do
+  !
+  ! Deallocate all local arrays
+  deallocate(nf_prdc_list,stat=ierr,errmsg=error_message)
+  call alloc_error(pname,"nf_prdc_list",2,__LINE__,__FILE__,ierr,error_message)
+  ! 
+  do ibc = -nbc_prdc,nbc_prdc
+    !
+    if ( allocated( prdc_idxf(ibc)%idxf ) ) then
+      !
+      deallocate(prdc_idxf(ibc)%idxf,stat=ierr,errmsg=error_message)
+      call alloc_error(pname,"prdc_idxf(ibc)%idxf",2,__LINE__,__FILE__,ierr, &
+        error_message)
+      !
+    end if
+    !
+  end do
+  !
+  deallocate(prdc_idxf,stat=ierr,errmsg=error_message)
+  call alloc_error(pname,"prdc_idxf",2,__LINE__,__FILE__,ierr,error_message)
+  ! 
+  do ibc = -nbc_prdc,nbc_prdc
+    !
+    if ( allocated( prdc_xyz(ibc)%xyz ) ) then
+      !
+      deallocate(prdc_xyz(ibc)%xyz,stat=ierr,errmsg=error_message)
+      call alloc_error(pname,"prdc_xyz(ibc)%xyz",2,__LINE__,__FILE__,ierr, &
+        error_message)
+      !
+    end if
+    !
+  end do
+  !
+  deallocate(prdc_xyz,stat=ierr,errmsg=error_message)
+  call alloc_error(pname,"prdc_xyz",2,__LINE__,__FILE__,ierr,error_message)
+  !
+  call debug_timer(leaving_procedure,pname)
+  !
+  ! Format Statements
+  11 format ("Periodic BC ",i2," has ",i6," faces; while Periodic BC ",i2, &
+    " has ",i6," faces.")
+  !
+end subroutine init_periodic_faces
+!
+!###############################################################################
+!
 subroutine create_face_rotations(face,fp,flx,face_rotation)
   !
   !.. Formal Arguments ..
@@ -3388,190 +3573,6 @@ continue
   22 format (4x,"WARNING!!! ",a,"_map(",i0,")%loc_to_glb IS UNALLOCATED")
   !
 end subroutine output_mapping_arrays
-!
-!###############################################################################
-!
-subroutine init_periodic_faces(bface)
-  !
-  ! Use Statements
-  use geovar, only : xyz_fc
-  use geovar, only : nfbnd
-  use kdtree2_module, only : kdkind,kdtree2,kdtree2_result
-  use kdtree2_module, only : kdtree2_create,kdtree2_destroy
-  use kdtree2_module, only : kdtree2_n_nearest
-  !
-  ! Formal Arguments
-  integer, allocatable, intent(inout) :: bface(:,:)
-  !
-  ! Local Varaibles
-  integer :: ierr
-  integer :: nbc_prdc,ibc,i
-  ! integer :: n_prdc_pair,nf_prdc_max
-  integer :: n,d
-  real(kdkind), dimension(:,:), allocatable :: data_array
-  real(kdkind), allocatable :: query_vec(:)
-  type(kdtree2), pointer :: tree
-  type(kdtree2_result) :: kd_result(1:1)
-  real(kdkind) :: rv
-  integer :: nalloc, rind
-  !
-  ! Local Types
-  type :: prdc_idxf_t
-    integer, allocatable :: idxf(:)
-  end type prdc_idxf_t
-  !
-  type :: prdc_xyz_t
-    real(wp), allocatable :: xyz(:,:)
-  end type prdc_xyz_t
-  !
-  ! Local Array
-  integer, allocatable :: nf_prdc_list(:)
-  type(prdc_idxf_t), allocatable :: prdc_idxf(:)
-  type(prdc_xyz_t), allocatable :: prdc_xyz(:)
-  !
-  ! Local Parameter
-  character(len=*), parameter :: pname = "init_periodic_faces"
-  !
-continue
-  !
-  call debug_timer(entering_procedure,pname)
-  !
-  ! Loop all bnd faces to find the periodic faces
-  ! Split them into separate groups
-  nbc_prdc = ubound(bc_periodic_list,dim=1)
-  !
-  ! nf_prdc_list stores the number of periodic faces for each periodic BC
-  allocate(nf_prdc_list(-nbc_prdc:nbc_prdc),source=0,stat=ierr, &
-    errmsg=error_message)
-  call alloc_error(pname,"nf_prdc_list",1,__LINE__,__FILE__,ierr, &
-    error_message)
-  !
-  ! prdc_idxf stores the face index of periodic faces for each periodic BC
-  allocate(prdc_idxf(-nbc_prdc:nbc_prdc),stat=ierr, &
-    errmsg=error_message)
-  call alloc_error(pname,"prdc_idxf",1,__LINE__,__FILE__,ierr,error_message)
-  !
-  ! Loop all bc_periodic_list to fill nf_prdc_list and prdc_idxf
-  do ibc = -nbc_prdc,nbc_prdc
-    !
-    nf_prdc_list(ibc) = count( bface(1,:) == bc_periodic_list(ibc) )
-    !
-    if ( nf_prdc_list(ibc) > 0 ) then
-      ! F2003 Auto Reallocation
-      prdc_idxf(ibc)%idxf = pack( [(i,i=1,nfbnd)], bface(1,:) == bc_periodic_list(ibc) )
-      !
-    end if
-    !
-  end do
-  !
-  ! Check if in the same periodic face pair, the number of faces matches each
-  ! other.
-  do ibc = 1,nbc_prdc
-    !
-    if ( nf_prdc_list(ibc) /= nf_prdc_list(-ibc) ) then
-      write(error_message,11) bc_periodic_list( ibc), nf_prdc_list( ibc), &
-                              bc_periodic_list(-ibc), nf_prdc_list(-ibc)
-      call stop_gfr(abort,pname,__LINE__,__FILE__, error_message)
-    end if
-    !
-  end do
-  !
-  ! Count the number of pairs of periodic faces
-  ! n_prdc_pair = count( nf_prdc_list(1:nbc_prdc) > 0 )
-  !
-  ! Create the xyz coordinates array for each pair of periodic faces
-  allocate(prdc_xyz(-nbc_prdc:nbc_prdc),stat=ierr, &
-    errmsg=error_message)
-  call alloc_error(pname,"prdc_xyz",1,__LINE__,__FILE__,ierr, &
-    error_message)
-  !
-  do ibc = -nbc_prdc,nbc_prdc
-    !
-    if ( allocated( prdc_idxf(ibc)%idxf ) ) then
-      !
-      ! idxf is allocated. So this is a periodic face group
-      ! Allocate ths coordinates array for this periodic face group
-      allocate( prdc_xyz(ibc)%xyz( 1:size(xyz_fc,dim=1), 1:nf_prdc_list(ibc) ),&
-        stat=ierr, errmsg=error_message )
-      call alloc_error(pname,"prdc_xyz(ibc)%xyz",1,__LINE__,__FILE__,ierr, &
-        error_message)
-      !
-      ! Get the face center coordinates for the periodic faces
-      do i = 1,nf_prdc_list(ibc)
-        prdc_xyz(ibc)%xyz(:,i) = xyz_fc(:, prdc_idxf(ibc)%idxf(i) )
-      end do
-      !
-    end if
-    !
-  end do
-  !
-  ! Now loop each periodic face pair
-  do ibc = 1,nbc_prdc
-    !
-    if ( allocated( prdc_xyz(ibc)%xyz ) ) then
-      !
-      ! Here we use kd-tree to do the finding.
-      ! Create the kdtree for this periodic face group.
-      tree => kdtree2_create(prdc_xyz(ibc)%xyz, sort=.true., rearrange=.true.)
-      !
-      ! Loop all faces in its corresponding face group
-      do i = 1,size(prdc_xyz(-ibc)%xyz,dim=2)
-        !
-        query_vec = prdc_xyz(-ibc)%xyz(:,i)
-        call kdtree2_n_nearest(tp=tree, qv=query_vec, nn=1, results=kd_result)
-        bface(5,prdc_idxf(-ibc)%idxf(i)) = prdc_idxf(ibc)%idxf(kd_result(1)%idx)
-        bface(5,prdc_idxf(ibc)%idxf(kd_result(1)%idx)) = prdc_idxf(-ibc)%idxf(i)
-        !
-      end do
-      !
-      ! Destroy the kd-tree
-      call kdtree2_destroy(tree)
-      !
-    end if
-    !
-  end do
-  !
-  ! Deallocate all local arrays
-  deallocate(nf_prdc_list,stat=ierr,errmsg=error_message)
-  call alloc_error(pname,"nf_prdc_list",2,__LINE__,__FILE__,ierr,error_message)
-  ! 
-  do ibc = -nbc_prdc,nbc_prdc
-    !
-    if ( allocated( prdc_idxf(ibc)%idxf ) ) then
-      !
-      deallocate(prdc_idxf(ibc)%idxf,stat=ierr,errmsg=error_message)
-      call alloc_error(pname,"prdc_idxf(ibc)%idxf",2,__LINE__,__FILE__,ierr, &
-        error_message)
-      !
-    end if
-    !
-  end do
-  !
-  deallocate(prdc_idxf,stat=ierr,errmsg=error_message)
-  call alloc_error(pname,"prdc_idxf",2,__LINE__,__FILE__,ierr,error_message)
-  ! 
-  do ibc = -nbc_prdc,nbc_prdc
-    !
-    if ( allocated( prdc_xyz(ibc)%xyz ) ) then
-      !
-      deallocate(prdc_xyz(ibc)%xyz,stat=ierr,errmsg=error_message)
-      call alloc_error(pname,"prdc_xyz(ibc)%xyz",2,__LINE__,__FILE__,ierr, &
-        error_message)
-      !
-    end if
-    !
-  end do
-  !
-  deallocate(prdc_xyz,stat=ierr,errmsg=error_message)
-  call alloc_error(pname,"prdc_xyz",2,__LINE__,__FILE__,ierr,error_message)
-  !
-  call debug_timer(leaving_procedure,pname)
-  !
-  ! Format Statements
-  11 format ("Periodic BC ",i2," has ",i6," faces; while Periodic BC ",i2, &
-    " has ",i6," faces.")
-  !
-end subroutine init_periodic_faces
 !
 !###############################################################################
 !
