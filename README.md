@@ -1,3 +1,7 @@
+# NOTE
+
+This repo is no longer maintained. All future commits will be pushed to the private repo.
+
 # NFS
 
 NFS is NPU Flux reconstruction Software. Based on GFR, NFS is developed to handle unstructured mesh with the Flux Reconstruction scheme for high order simulation of turbulence. GFR is originally from NASA. Its repo is https://github.com/nasa/GFR.
@@ -12,4 +16,5 @@ NFS is NPU Flux reconstruction Software. Based on GFR, NFS is developed to handl
 - BDF2 time scheme (LUSGS)
 - Custom profile initialization
 - Time averaged vorticity
+
 
